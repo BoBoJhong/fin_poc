@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastmcp import FastMCP
 
+from app.company_resolver import find_company_mentions
 from app.config import get_settings
 from app.repositories import build_finance_repository, dump_evidence
 from app.validation import EvidenceValidator
@@ -14,6 +15,21 @@ mcp = FastMCP(
     "Finance Data MCP",
     instructions="Read-only, parameterized financial metric tools. Arbitrary SQL is forbidden.",
 )
+
+
+@mcp.tool
+async def resolve_company(name_or_code: str) -> dict:
+    """Resolve names, aliases, and co_codes against the configured company master."""
+    items = await repository.list_companies()
+    allowed = [item for item in items if item.co_code in settings.allowed_co_code_set]
+    matches = find_company_mentions(name_or_code, allowed)
+    return {
+        "companies": [item.model_dump(mode="json") for item in matches],
+        "metadata": {
+            "tool": "resolve_company",
+            "match_count": len(matches),
+        },
+    }
 
 
 @mcp.tool

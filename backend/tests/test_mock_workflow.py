@@ -38,8 +38,23 @@ async def test_mixed_question_uses_bounded_subagents() -> None:
 
 @pytest.mark.asyncio
 async def test_company_code_mismatch_is_rejected() -> None:
-    with pytest.raises(ValueError, match="不一致"):
+    with pytest.raises(ValueError, match="目前選擇"):
         await service().answer("請分析 DEMO02 的營收", "DEMO01")
+
+
+@pytest.mark.asyncio
+async def test_company_alias_is_resolved_before_retrieval() -> None:
+    result = await service().answer("範科 2026 Q2 的營收是多少？", "DEMO01")
+    resolution = result.verification["company_resolution"]
+    assert resolution["passed"] is True
+    assert resolution["method"] == "company_master"
+    assert resolution["mentioned_co_codes"] == ["DEMO01"]
+
+
+@pytest.mark.asyncio
+async def test_multiple_company_question_is_rejected() -> None:
+    with pytest.raises(ValueError, match="多家公司"):
+        await service().answer("比較範例科技與示範製造的營收", "DEMO01")
 
 
 @pytest.mark.asyncio

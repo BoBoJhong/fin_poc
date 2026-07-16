@@ -61,6 +61,7 @@ class CompanySummary(BaseModel):
     co_code: str
     company_name: str
     industry: str | None = None
+    aliases: list[str] = Field(default_factory=list)
 
 
 class ChatResponse(BaseModel):

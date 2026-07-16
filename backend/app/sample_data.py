@@ -4,8 +4,16 @@ from app.models import Evidence, SourceLocator, SourcePreview, SourceType
 
 
 COMPANIES = {
-    "DEMO01": {"name": "範例科技股份有限公司", "industry": "企業軟體"},
-    "DEMO02": {"name": "示範製造股份有限公司", "industry": "智慧製造"},
+    "DEMO01": {
+        "name": "範例科技股份有限公司",
+        "industry": "企業軟體",
+        "aliases": ["範例科技", "範科"],
+    },
+    "DEMO02": {
+        "name": "示範製造股份有限公司",
+        "industry": "智慧製造",
+        "aliases": ["示範製造", "示製"],
+    },
 }
 
 
@@ -92,7 +100,33 @@ EVIDENCE: list[Evidence] = [
                 "Risk:海外專案驗收遞延",
             ]
         ),
-        metadata={"hops": 2, "is_synthetic": True},
+        metadata={
+            "hops": 2,
+            "is_synthetic": True,
+            "relationship_provenance": [
+                {
+                    "type": "MENTIONS",
+                    "co_code": "DEMO01",
+                    "source_id": "demo01-2026q2-call",
+                    "period": "2026Q2",
+                    "data_version": "demo-v1",
+                },
+                {
+                    "type": "EXPOSED_TO",
+                    "co_code": "DEMO01",
+                    "source_id": "demo01-2026q2-call",
+                    "period": "2026Q2",
+                    "data_version": "demo-v1",
+                },
+                {
+                    "type": "SELLS",
+                    "co_code": "DEMO01",
+                    "source_id": "demo01-2026q2-call",
+                    "period": "2026Q2",
+                    "data_version": "demo-v1",
+                },
+            ],
+        },
     ),
 ]
 

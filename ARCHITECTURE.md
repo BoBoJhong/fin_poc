@@ -29,7 +29,7 @@
 flowchart TB
     U["使用者"] --> R["React Chatbot"]
     R --> F["FastAPI<br/>API／SSE"]
-    F --> CR["Company Resolver<br/>Alias → co_code"]
+    F --> CR["Company Resolver<br/>Master Match → Constrained LLM → co_code"]
     CR --> MA["Main Agent／Router"]
 
     MA --> KG["Knowledge／GraphRAG Subagent"]
@@ -82,6 +82,26 @@ sequenceDiagram
     LG-->>API: Answer + Citations
     API-->>U: SSE + Source Preview
 ```
+
+### 4.1 公司解析與資料範圍
+
+Company Resolver 在任何文件、Graph 或財務資料查詢之前執行：
+
+```mermaid
+flowchart LR
+    Q["Question + selected co_code"] --> M["Company Master normalization<br/>正式名稱／簡稱／Alias／代碼"]
+    M -->|唯一命中| S["Deterministic scope check"]
+    M -->|未命中| L["Company LLM<br/>只能選主檔候選"]
+    L --> S
+    S -->|與 selected co_code 一致| R["Retrieval"]
+    S -->|不同／多家公司／unknown| X["拒絕查詢並要求明確公司"]
+```
+
+- 問題沒有提到公司時，沿用 UI／API 選定的 `co_code`。
+- 問題提到一家公司時，解析結果必須與選定的 `co_code` 一致，否則在 Retrieval 前拒絕。
+- 問題同時提到多家公司時，目前拒絕並要求一次查一家；跨公司比較須等公司規格明確後另行開放。
+- LLM 回傳的代碼必須存在於允許的 Company Master；未知或自行生成的代碼不能進入 Retrieval。
+- SQLite、Neo4j Vector、Graph Path 與 Source Preview 都再次使用已確認的同一 `co_code`，不只依賴 Resolver。
 
 ## 5. 本機資料匯入流程
 
@@ -137,7 +157,7 @@ erDiagram
 
 | Agent／Node | 主要責任 | 工具邊界 |
 | --- | --- | --- |
-| Company Resolver | 公司名稱／Alias 解析成 `co_code` | Company Master／受控 Resolver |
+| Company Resolver | 先以 Company Master 確定性比對名稱／Alias／代碼；未命中時才讓 LLM 從主檔候選中判斷 | Finance MCP `resolve_company`／Company Master；LLM 不可產生主檔外代碼 |
 | Main Agent／Router | 意圖判斷、Scope 傳遞、選擇受控查詢路徑 | 不直接查詢 DB／Graph |
 | Knowledge／GraphRAG Subagent | Chunk Vector Retrieval、Graph Expansion、Relationship Evidence | Knowledge MCP |
 | Finance DB Subagent | SQLite 查詢、財務指標、期間比較與 DB Provenance | Finance Data MCP |
@@ -154,7 +174,6 @@ erDiagram
 Knowledge MCP：
 
 ```text
-resolve_company
 search_financial_documents
 search_graph_relationships
 get_source_preview
@@ -163,13 +182,15 @@ get_source_preview
 Finance MCP：
 
 ```text
+resolve_company
+list_companies
 get_financial_metrics
 compare_financial_periods
 get_record_provenance
 get_financial_source_preview
 ```
 
-`search_financial_documents` 與 `get_source_preview` 的 Runtime 實作以 Neo4j Chunk、Locator 與 Provenance 為準；公司 API／DB 規格文件不納入此索引。Finance MCP 僅查詢本機 SQLite，不在聊天請求中連線上游 MariaDB。
+`resolve_company` 以 Finance Company Master、正式名稱、簡稱、Alias 與 `co_code` 為候選來源。程式先做正規化精確比對；沒有命中時 Company LLM 只能從 `list_companies` 回傳的允許候選中選擇，回傳主檔外代碼一律視為 `unknown`。`search_financial_documents` 與 `get_source_preview` 的 Runtime 實作以 Neo4j Chunk、Locator 與 Provenance 為準；公司 API／DB 規格文件不納入此索引。Finance MCP 僅查詢本機 SQLite，不在聊天請求中連線上游 MariaDB。
 
 所有工具回傳統一 `Evidence[]` Envelope。實作基線目前使用單一 Pydantic `Evidence`＋型別特定欄位；真實資料接入時應在不改外層 Envelope 的前提下，將其收斂為 `DocumentEvidence`、`DatabaseEvidence`、`GraphEvidence` 三種可辨識 Contract：
 
@@ -203,9 +224,9 @@ get_financial_source_preview
 - 程式使用 `neo4j-graphrag` 的 `VectorRetriever` 先找相關 Chunk，再以固定 Cypher 擴展關聯；生成仍留在 LangGraph 後段，讓 Evidence 能先通過驗證。
 - Query 與索引使用相同 Qwen Embedding model tag。
 - Vector Retriever 強制 `co_code` filter。
-- Graph Traversal 使用白名單關係，預設最多 2 hops。
+- Graph Traversal 使用白名單關係，預設最多 2 hops；路徑中的每個 Node 與 Relationship 都必須與 Query `co_code` 相同。
 - 不啟用 unrestricted Text2Cypher。
-- Chunk、Entity、Relation 都保留來源與資料版本。
+- Chunk、Entity、Relation 都保留來源與資料版本；每條可回答關係必須具有 `co_code`、`source_id`、`period`、`data_version` 與 Provenance。
 - Neo4j 2026.01+ Vector Index 應將 `co_code` 宣告為 filterable property。
 
 ## 10. 準確性控制
@@ -215,15 +236,16 @@ Evidence Validator 在答案產生前檢查：
 1. Evidence 的 `co_code` 是否位於授權範圍。
 2. Neo4j Chunk／Graph Path 或 SQLite Record 與其 Locator 是否存在。
 3. 幣別、單位、季度、單季／累計、合併／個體欄位是否齊全且無衝突。
-4. Graph Relationship 是否有 Provenance。
+4. Graph Relationship 是否有完整 Provenance，且路徑中每條關係的 `co_code`、`data_version` 是否一致。
 
 Answer Validator 在 Draft 產生後檢查：
 
-1. 答案中的數字、單位與幣別是否可由 Evidence 精確核對。
-2. Citation Index 與 Evidence ID 是否存在且對應正確。
-3. 沒有 Evidence 的主張不得進入最終答案。
+1. 每個事實段落是否緊鄰至少一個 Citation；未引註主張直接失敗。
+2. 答案中的數字是否存在於該主張實際引用的 Evidence，而非僅存在於任意檢索結果。
+3. Citation Index 與 Evidence ID 是否存在且對應正確；Response 只輸出答案實際使用的 Citation。
+4. 沒有 Evidence 的主張不得進入最終答案。
 
-Semantic Verifier 最後進行 Claim-Evidence 語意檢查。答案表達或引註錯誤時使用相同 Evidence 重寫一次；若仍失敗則拒絕回答。目前核心 PoC 對「Evidence 不足」採直接拒答，重新檢索一次屬後續強化項目，不在文件中宣稱已完成。
+Semantic Verifier 最後依 Claim 上標示的 Citation Index，只使用被引用的 Evidence 進行 Claim-Evidence 語意檢查；不能用未引用 Evidence 替錯誤引註過關。答案表達或引註錯誤時使用相同 Evidence 重寫一次；若仍失敗則拒絕回答。目前核心 PoC 對「Evidence 不足」採直接拒答，重新檢索一次屬後續強化項目，不在文件中宣稱已完成。
 
 ## 11. Source Preview
 
@@ -275,7 +297,9 @@ Source Preview 不依賴獨立 Local Source Store；由 Knowledge MCP 讀取 Neo
 - 金融關鍵數字可核對率必須為 100%。
 - 無證據正確拒答率初始目標 95% 以上。
 - 必須包含 Alias 衝突、跨公司、Prompt Injection 文件與各依賴故障案例。
+- 公司正式名稱、簡稱、Alias 與 `co_code` 必須解析至同一公司；未知、歧義或與 UI 選定公司不同時不得開始 Retrieval。
 - 跨 `co_code` Evidence 必須為 0。
+- 每個事實 Claim 必須引用實際支持它的 Evidence；數字只存在於其他未引用 Evidence 時必須驗證失敗。
 - Vector-only 與 GraphRAG 必須保存對照結果；GraphRAG 對關聯題型的正確率或 Recall 必須有可量測改善，否則不得僅以架構存在作為成功。
 - 每次回答包含 Trace ID、資料版本與 Evidence IDs。
 - 公司 LLM、Ollama、SQLite、Neo4j、MCP 失敗時不得產生假答案。
@@ -397,13 +421,14 @@ flowchart LR
 | React Chat／SSE            | Mock 已完成  | 真實公司清單與 IAM 待接              | NEW-08                  |
 | FastAPI Chat／Scope   | PoC 已完成  | 正式 IAM 待接              | NEW-04、NEW-05           |
 | LangGraph Main Workflow   | Mock 已完成  | 真實題庫驗證待做              | NEW-03、NEW-05           |
+| Company Resolver | Company Master 確定性比對＋受主檔約束的 LLM fallback 已完成 | 真實 Alias Master／歧義題庫待接 | 公司名稱→`co_code` |
 | SQLite Repository | Adapter 已完成 | 公司內部 Schema Mapping 待填 | NEW-02 |
 | Neo4j Chunk／Vector Index  | 初始化與查詢程式已完成 | 真實 Index／維度待公司內確認 | NEW-01、NEW-07 |
 | Neo4j Graph Schema／Cypher | Demo 已完成 | PoC 最小 Ontology 待公司內引用 | NEW-06 |
 | Ollama Qwen Embedding     | Adapter 已完成 | 實際模型 Tag／維度待公司內確認 | 模型 Contract |
 | Company LLM Adapter       | Mock／OpenAI-compatible 已完成 | 公司 API Contract 待內部 Mapping | Route／Synthesize／Verify |
 | Ingestion／SQLite Snapshot／資料版本 | 範例已完成 | 既有資料完整性待內部確認 | NEW-04、NEW-09 |
-| Evidence／Citation         | 基礎 Contract 已完成 | 三種具體 Evidence Model 待強化 | NEW-04、NEW-05 |
+| Evidence／Citation         | Claim-Citation 數字綁定、未引註主張拒絕與實際 Citation 輸出已完成 | 三種具體 Evidence Model、真實語意題庫待強化 | NEW-04、NEW-05 |
 | Knowledge MCP             | 已完成  | 真實 Neo4j 驗證待做 | NEW-01 |
 | Finance Data MCP          | 已完成  | 真實 SQLite 驗證待做 | NEW-02 |
 | MCP Gateway               | 已完成  | 正式 Auth 待做 | NEW-03 |
@@ -493,14 +518,14 @@ flowchart LR
 ### 18.1 線上問答摘要
 
 1. User 透過 React Chatbot 提問，FastAPI 只負責 API／SSE 與 Context 傳遞。
-2. Company Resolver 將公司名稱或 Alias 解析為 `co_code`。
+2. Company Resolver 先用 Finance Company Master 比對正式名稱、Alias 或代碼；未命中時 Company LLM 只能從主檔候選選擇，最後由程式核對選定 `co_code`。
 3. Main Agent／Router 只在受控路徑中選擇 Knowledge／GraphRAG 或 Finance DB Subagent。
 4. Knowledge／GraphRAG Subagent 經 Knowledge MCP，使用 Qwen Query Embedding 查 Neo4j Chunk Vector，再以固定 Cypher 擴展 Graph 關係。
 5. Finance DB Subagent 經 Finance Data MCP 查詢本機 SQLite；SQLite 是上游 MariaDB 的本機快照。
 6. 兩條路徑都回傳統一的 `Evidence[]`，交由 Evidence Aggregator 合併與去重。
-7. Deterministic Validator 先檢查 `co_code`、數字、期間、Locator 與 Provenance。
-8. Verifier Subagent 再進行 Claim ↔ Evidence 語意核對，失敗最多重新路由或修正一次。
-9. Answer Synthesis Subagent 僅根據驗證後的 Evidence 產生答案、Citation、Evidence ID 與 Trace ID。
+7. Evidence Validator 在生成前檢查 `co_code`、期間、Locator 與 Graph／DB Provenance。
+8. Answer Synthesis 僅根據驗證後的 Evidence 產生 Draft 與 Citation。
+9. Answer Validator 逐 Claim 核對 Citation 與數字，再由 Semantic Verifier 只針對 Claim 引用的 Evidence 做語意核對；失敗最多使用相同 Evidence 修正一次。
 10. Citation Recheck 由 Knowledge MCP 讀取 Neo4j Chunk／Graph Evidence，或由 Finance Data MCP 讀取 SQLite Record Provenance。
 
 ### 18.2 最新確認事項
@@ -508,7 +533,7 @@ flowchart LR
 - 上游資料庫是 MariaDB，但 Chat Runtime 不直接連線 MariaDB。
 - MariaDB 資料先落地本機 SQLite；SQLite 不儲存 Vector。
 - Neo4j GraphRAG 保存可問答 Chunk、Vector、Entity、Relationship、Locator 與 Provenance。
-- Ollama Qwen 只負責 Embedding，公司 LLM API 負責 Route、Verify 與 Answer Synthesis。
+- Ollama Qwen 只負責 Embedding，公司 LLM API 負責受 Company Master 約束的公司語意 fallback、Route、Verify 與 Answer Synthesis。
 - 公司 API／DB 規格文件只供開發、Mapping 與 Adapter 參考，不是 Runtime RAG Source。
 - 不建立獨立 Local Source Store 元件；Source Preview 從 Neo4j Evidence 與 SQLite Provenance 取得。
 - `Document RAG` 的 Chunk Vector Retrieval 已併入 Knowledge／GraphRAG Subagent，不另設 Subagent。
@@ -641,13 +666,16 @@ MCP_ENABLED=true
 | Runtime DB | `MariaFinanceRepository` 已替換為唯讀 `SQLiteFinanceRepository` | `backend/app/repositories.py` |
 | 設定 | 新增 `SQLITE_PATH`、`SQLITE_READ_ONLY`；Neo4j、Ollama、MCP 預設皆為 `127.0.0.1` | `backend/app/config.py`、`.env.example` |
 | Agent | 路由合併為 `knowledge`／`finance`，Document Vector 與 Graph Expansion 由同一 Knowledge Subagent 編排 | `backend/app/agents.py`、`backend/app/llm.py` |
+| Company Resolver | Finance Company Master 提供名稱／簡稱／Alias／代碼；先確定性比對，未命中才以 Company LLM 從主檔候選中選擇 | `backend/app/company_resolver.py`、`backend/app/llm.py`、`backend/mcp_servers/finance.py` |
 | 驗證順序 | Evidence Aggregator → Evidence Validator → Answer Draft → Answer Validator → Semantic Verifier → Final Answer | `backend/app/agents.py`、`backend/app/validation.py` |
+| Graph Scope | Vector Seed、Path Node、Relationship 與 Relationship Provenance 全部強制同一 `co_code`／`data_version` | `backend/app/repositories.py`、`backend/scripts/init_data.py` |
+| Claim Citation | 每個事實段落需引註；數字必須存在於該 Claim 引用的 Evidence，Response 只回傳實際使用的 Citation | `backend/app/validation.py`、`backend/app/agents.py`、`backend/app/llm.py` |
 | MCP | Knowledge MCP 使用 8001，Finance MCP 使用 8002；Finance Tool 改讀 SQLite | `backend/mcp_servers/`、`backend/app/mcp_gateway.py` |
 | 公司清單 API | 新增 `GET /api/v1/companies`，只顯示 SQLite／Mock 與 Allowlist 的交集 | `backend/app/main.py` |
 | 前端公司選單 | 從 API 動態載入，不再只依賴硬編碼選項 | `frontend/src/api.ts`、`frontend/src/App.tsx` |
 | SQLite 初始化 | 提供 Demo Schema／Seed；既有 SQLite 不需要重新建立 | `backend/scripts/init_sqlite.py` |
 | 純本機啟動 | 一個 Python Launcher 管理 FastAPI、兩個 MCP 與 Vite | `backend/scripts/run_local.py` |
-| 測試與 Golden Set | Route Expectation 已改為 `knowledge`／`finance`，並新增 SQLite Repository 測試 | `backend/tests/`、`eval/golden_set.json` |
+| 測試與 Golden Set | 新增正式名稱／Alias／代碼、錯公司、多公司、Graph Scope 與 Claim-Citation 負向案例 | `backend/tests/`、`eval/golden_set.json` |
 
 ### 20.2 本機 Process 拓撲
 

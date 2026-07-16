@@ -10,7 +10,6 @@ async def test_knowledge_mcp_contract_and_scope() -> None:
     async with Client(knowledge_mcp) as client:
         tools = await client.list_tools()
         assert {
-            "resolve_company",
             "search_financial_documents",
             "search_graph_relationships",
             "get_source_preview",
@@ -26,6 +25,13 @@ async def test_knowledge_mcp_contract_and_scope() -> None:
 @pytest.mark.asyncio
 async def test_finance_mcp_returns_recheckable_record() -> None:
     async with Client(finance_mcp) as client:
+        tools = await client.list_tools()
+        assert "resolve_company" in {tool.name for tool in tools}
+        resolution = await client.call_tool(
+            "resolve_company", {"name_or_code": "範科 2026 Q2 營收"}
+        )
+        assert resolution.data["companies"][0]["co_code"] == "DEMO01"
+
         result = await client.call_tool(
             "get_financial_metrics",
             {"co_code": "DEMO01", "period": "2026Q2"},
@@ -39,4 +45,3 @@ async def test_finance_mcp_returns_recheckable_record() -> None:
             {"source_id": "demo01-financial-metrics-2026q2", "co_code": "DEMO01"},
         )
         assert preview.data["preview"]["database_record"]["data_version"] == "demo-v1"
-

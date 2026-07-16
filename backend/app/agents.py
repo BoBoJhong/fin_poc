@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from langgraph.graph import END, START, StateGraph
 
+from app.company_resolver import CompanyResolutionError, enforce_company_scope
 from app.llm import CompanyLLMClient
 from app.mcp_gateway import MCPGateway
 from app.models import ChatResponse, Citation, Evidence
@@ -21,6 +22,7 @@ class AgentState(TypedDict, total=False):
     evidence: list[Evidence]
     answer: str
     verification: dict[str, Any]
+    company_resolution: dict[str, Any]
     repaired: bool
 
 
@@ -64,16 +66,43 @@ class FinancialAgentService:
 
     async def _scope_node(self, state: AgentState) -> AgentState:
         scoped = self.validator.validate_scope(state["co_code"])
-        mentioned_codes = {
-            code for code in self.validator.allowed_co_codes if code in state["query"].upper()
-        }
-        if mentioned_codes and mentioned_codes != {scoped}:
-            raise ValueError(
-                f"問題中的公司 {sorted(mentioned_codes)} 與目前授權公司 {scoped} 不一致"
+        mentioned_companies = await self.gateway.resolve_company(state["query"])
+        resolution_method = "company_master"
+        resolution_status = "matched" if mentioned_companies else "not_mentioned"
+        resolution_reason = "deterministic_name_alias_or_code_match"
+        if not mentioned_companies:
+            companies = await self.gateway.list_companies()
+            semantic_resolution = await self.llm.resolve_company_reference(
+                state["query"], companies
             )
+            resolution_status = semantic_resolution["status"]
+            resolution_reason = semantic_resolution["reason"]
+            mentioned_companies = semantic_resolution["companies"]
+            resolution_method = "company_llm_constrained"
+            if resolution_status == "unknown":
+                raise CompanyResolutionError(
+                    "問題似乎提到公司，但無法對應到允許的公司主檔；請改用正式名稱或代碼"
+                )
+            if resolution_status == "ambiguous" and len(mentioned_companies) < 2:
+                raise CompanyResolutionError("公司名稱不明確；請改用正式名稱或代碼")
+        scoped = enforce_company_scope(scoped, mentioned_companies)
         match = re.search(r"(20\d{2})\s*[-_/ ]?Q([1-4])", state["query"], re.IGNORECASE)
         period = f"{match.group(1)}Q{match.group(2)}" if match else None
-        return {"co_code": scoped, "period": period, "evidence": []}
+        return {
+            "co_code": scoped,
+            "period": period,
+            "evidence": [],
+            "company_resolution": {
+                "passed": True,
+                "method": resolution_method,
+                "status": resolution_status,
+                "reason": resolution_reason,
+                "co_code": scoped,
+                "mentioned_co_codes": [
+                    company.co_code for company in mentioned_companies
+                ],
+            },
+        }
 
     async def _route_node(self, state: AgentState) -> AgentState:
         routes = await self.llm.route(state["query"])
@@ -112,6 +141,7 @@ class FinancialAgentService:
         return {
             "evidence": valid,
             "verification": {
+                "company_resolution": state.get("company_resolution", {}),
                 "evidence": {
                     "passed": bool(valid),
                     "reason": "evidence_contract_valid" if valid else "no_evidence",
@@ -222,6 +252,12 @@ class FinancialAgentService:
             }
         )
         evidence = final.get("evidence", [])
+        cited_indices = {
+            int(value) for value in re.findall(r"\[(\d+)]", final["answer"])
+        }
+        cited_evidence = [
+            item for index, item in enumerate(evidence, start=1) if index in cited_indices
+        ]
         citations = [
             Citation(
                 index=index,
@@ -232,6 +268,7 @@ class FinancialAgentService:
                 locator=item.locator,
             )
             for index, item in enumerate(evidence, start=1)
+            if index in cited_indices
         ]
         return ChatResponse(
             answer=final["answer"],
@@ -240,5 +277,5 @@ class FinancialAgentService:
             trace_id=trace_id,
             routes=final.get("routes", []),
             verification=final.get("verification", {}),
-            data_versions=sorted({item.data_version for item in evidence}),
+            data_versions=sorted({item.data_version for item in cited_evidence}),
         )

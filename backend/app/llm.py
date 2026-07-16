@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 
 from app.config import Settings
-from app.models import Evidence
+from app.models import CompanySummary, Evidence
 
 
 class CompanyLLMClient:
@@ -15,6 +15,62 @@ class CompanyLLMClient:
 
     def __init__(self, settings: Settings):
         self.settings = settings
+
+    async def resolve_company_reference(
+        self, query: str, companies: list[CompanySummary]
+    ) -> dict[str, Any]:
+        """Use the LLM only to select codes from the supplied company master."""
+        if self.settings.company_llm_mode == "mock":
+            return {"status": "not_mentioned", "companies": [], "reason": "mock_mode"}
+        candidates = [
+            {
+                "co_code": company.co_code,
+                "company_name": company.company_name,
+                "aliases": company.aliases,
+            }
+            for company in companies
+        ]
+        content = await self._chat(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "Identify explicit company references in the question. Select only from "
+                        "COMPANY_MASTER and never invent a co_code. Return JSON only with "
+                        'status as "matched", "ambiguous", "unknown", or "not_mentioned"; '
+                        'co_codes as an array; and reason as a short string. Use "unknown" when '
+                        "a company is explicitly named but is absent from COMPANY_MASTER."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {"query": query, "company_master": candidates},
+                        ensure_ascii=False,
+                    ),
+                },
+            ]
+        )
+        parsed = self._parse_json(content)
+        status = str(parsed.get("status", "unknown"))
+        if status not in {"matched", "ambiguous", "unknown", "not_mentioned"}:
+            status = "unknown"
+        master = {company.co_code: company for company in companies}
+        codes = [
+            str(code).strip().upper()
+            for code in parsed.get("co_codes", [])
+            if str(code).strip().upper() in master
+        ]
+        selected = [master[code] for code in dict.fromkeys(codes)]
+        if status == "matched" and len(selected) != 1:
+            status = "ambiguous" if selected else "unknown"
+        if status == "not_mentioned":
+            selected = []
+        return {
+            "status": status,
+            "companies": selected,
+            "reason": str(parsed.get("reason", "company_llm_resolution")),
+        }
 
     async def route(self, query: str) -> list[str]:
         if self.settings.company_llm_mode == "mock":
@@ -132,7 +188,8 @@ class CompanyLLMClient:
                 {
                     "role": "system",
                     "content": (
-                        "Check whether every factual claim is supported by the supplied evidence. "
+                        "Check every factual claim only against the evidence indices cited next "
+                        "to that claim. A claim supported by uncited evidence must fail. "
                         'Return JSON only: {"passed":true,"reason":"..."}.'
                     ),
                 },
@@ -141,7 +198,14 @@ class CompanyLLMClient:
                     "content": json.dumps(
                         {
                             "answer": answer,
-                            "evidence": [item.content for item in evidence],
+                            "evidence": [
+                                {
+                                    "citation": index,
+                                    "evidence_id": item.evidence_id,
+                                    "content": item.content,
+                                }
+                                for index, item in enumerate(evidence, start=1)
+                            ],
                         },
                         ensure_ascii=False,
                     ),

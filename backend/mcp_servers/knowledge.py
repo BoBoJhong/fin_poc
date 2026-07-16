@@ -4,7 +4,6 @@ from fastmcp import FastMCP
 
 from app.config import get_settings
 from app.repositories import build_knowledge_repository, dump_evidence
-from app.sample_data import COMPANIES
 from app.validation import EvidenceValidator
 
 
@@ -15,19 +14,6 @@ mcp = FastMCP(
     "Knowledge MCP",
     instructions="Scoped financial document, graph and source-preview tools.",
 )
-
-
-@mcp.tool
-async def resolve_company(name_or_code: str) -> dict:
-    """Resolve a company only within the configured allowlist."""
-    needle = name_or_code.strip().lower()
-    matches = [
-        {"co_code": code, **company}
-        for code, company in COMPANIES.items()
-        if code in settings.allowed_co_code_set
-        and (needle == code.lower() or needle in company["name"].lower())
-    ]
-    return {"companies": matches}
 
 
 @mcp.tool

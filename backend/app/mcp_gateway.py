@@ -4,6 +4,7 @@ import asyncio
 import json
 from typing import Any
 
+from app.company_resolver import find_company_mentions
 from app.config import Settings
 from app.models import CompanySummary, Evidence, SourcePreview, ToolEnvelope
 from app.repositories import (
@@ -128,6 +129,20 @@ class MCPGateway:
             "get_financial_metrics", {"co_code": co_code, "period": period}
         )
         return ToolEnvelope.model_validate(payload).evidence
+
+    async def resolve_company(self, query: str) -> list[CompanySummary]:
+        if not self.settings.mcp_enabled:
+            items = await self.finance.list_companies()
+            allowed = [
+                item for item in items if item.co_code in self.settings.allowed_co_code_set
+            ]
+            return find_company_mentions(query, allowed)
+        payload = await self._call("resolve_company", {"name_or_code": query})
+        return [
+            CompanySummary.model_validate(item)
+            for item in payload.get("companies", [])
+            if item.get("co_code") in self.settings.allowed_co_code_set
+        ]
 
     async def list_companies(self) -> list[CompanySummary]:
         if not self.settings.mcp_enabled:

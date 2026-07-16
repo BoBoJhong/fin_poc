@@ -19,6 +19,17 @@ CREATE TABLE IF NOT EXISTS companies (
     updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS company_aliases (
+    co_code TEXT NOT NULL,
+    alias TEXT NOT NULL,
+    alias_type TEXT NOT NULL DEFAULT 'name',
+    PRIMARY KEY (co_code, alias),
+    FOREIGN KEY (co_code) REFERENCES companies(co_code)
+);
+
+CREATE INDEX IF NOT EXISTS idx_company_alias
+    ON company_aliases (alias);
+
 CREATE TABLE IF NOT EXISTS data_sources (
     source_id TEXT PRIMARY KEY,
     co_code TEXT NOT NULL,
@@ -81,6 +92,18 @@ def seed_demo(connection: sqlite3.Connection) -> None:
             "sha256:demo01-metrics-v1",
             "demo-v1",
         ),
+    )
+    connection.executemany(
+        """
+        INSERT OR REPLACE INTO company_aliases (co_code, alias, alias_type)
+        VALUES (?, ?, ?)
+        """,
+        [
+            ("DEMO01", "範例科技", "short_name"),
+            ("DEMO01", "範科", "alias"),
+            ("DEMO02", "示範製造", "short_name"),
+            ("DEMO02", "示製", "alias"),
+        ],
     )
     connection.executemany(
         """

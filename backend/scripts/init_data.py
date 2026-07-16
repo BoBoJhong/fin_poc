@@ -191,16 +191,28 @@ def upsert_graph_relations(driver, database: str):
         MERGE (product:Product {name: 'Atlas ERP', co_code: 'DEMO01'})
         MERGE (risk:Risk {name: '海外專案驗收遞延', co_code: 'DEMO01'})
         MERGE (company)-[s:SELLS]->(product)
-          SET s.source_id = 'demo01-2026q2-call', s.period = '2026Q2'
+          SET s.co_code = 'DEMO01',
+              s.source_id = 'demo01-2026q2-call',
+              s.period = '2026Q2',
+              s.data_version = 'demo-v1',
+              s.provenance_text =
+                '範例科技銷售 Atlas ERP；來源為 2026 Q2 法說會第 18 段。'
         MERGE (product)-[e:EXPOSED_TO]->(risk)
-          SET e.source_id = 'demo01-2026q2-call',
+          SET e.co_code = 'DEMO01',
+              e.source_id = 'demo01-2026q2-call',
               e.period = '2026Q2',
+              e.data_version = 'demo-v1',
               e.provenance_text =
                 'Atlas ERP 海外專案可能受到客戶驗收時程遞延影響；來源為法說會第 18 段。'
         WITH risk
         MATCH (chunk:Chunk {chunk_id: 'demo01-call-p18'})
         MERGE (chunk)-[m:MENTIONS]->(risk)
-          SET m.source_id = 'demo01-2026q2-call', m.period = '2026Q2'
+          SET m.co_code = 'DEMO01',
+              m.source_id = 'demo01-2026q2-call',
+              m.period = '2026Q2',
+              m.data_version = 'demo-v1',
+              m.provenance_text =
+                '法說會第 18 段提及海外專案驗收遞延風險。'
         """,
         database_=database,
     )

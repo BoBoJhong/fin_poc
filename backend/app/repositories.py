@@ -74,7 +74,12 @@ class MockKnowledgeRepository:
 class MockFinanceRepository:
     async def list_companies(self) -> list[CompanySummary]:
         return [
-            CompanySummary(co_code=code, company_name=item["name"], industry=item["industry"])
+            CompanySummary(
+                co_code=code,
+                company_name=item["name"],
+                industry=item["industry"],
+                aliases=item.get("aliases", []),
+            )
             for code, item in COMPANIES.items()
         ]
 
@@ -121,15 +126,31 @@ class SQLiteFinanceRepository:
         return connection
 
     async def list_companies(self) -> list[CompanySummary]:
-        def run() -> list[dict[str, Any]]:
+        def run() -> tuple[list[dict[str, Any]], dict[str, list[str]]]:
             with self._connect() as connection:
                 rows = connection.execute(
                     "SELECT co_code, company_name, industry FROM companies ORDER BY co_code"
                 ).fetchall()
-                return [dict(row) for row in rows]
+                alias_table = connection.execute(
+                    "SELECT 1 FROM sqlite_master "
+                    "WHERE type = 'table' AND name = 'company_aliases'"
+                ).fetchone()
+                aliases: dict[str, list[str]] = {}
+                if alias_table:
+                    alias_rows = connection.execute(
+                        "SELECT co_code, alias FROM company_aliases ORDER BY co_code, alias"
+                    ).fetchall()
+                    for alias_row in alias_rows:
+                        aliases.setdefault(alias_row["co_code"], []).append(alias_row["alias"])
+                return [dict(row) for row in rows], aliases
 
-        rows = await asyncio.to_thread(run)
-        return [CompanySummary.model_validate(row) for row in rows]
+        rows, aliases = await asyncio.to_thread(run)
+        return [
+            CompanySummary.model_validate(
+                {**row, "aliases": aliases.get(row["co_code"], [])}
+            )
+            for row in rows
+        ]
 
     async def get_metrics(
         self, co_code: str, period: str | None = None
@@ -344,11 +365,22 @@ class Neo4jKnowledgeRepository:
 
         cypher = f"""
         MATCH (chunk:Chunk)-[mention:MENTIONS]->(anchor)
-        WHERE chunk.co_code = $co_code AND chunk.chunk_id IN $chunk_ids
-        MATCH path=(anchor)-[rels*0..{hops}]-(node)
-        WHERE ALL(r IN rels WHERE type(r) IN
-              ['SELLS', 'EXPOSED_TO', 'AFFECTS'])
-        WITH chunk, path, node, rels
+        WHERE chunk.co_code = $co_code
+          AND chunk.chunk_id IN $chunk_ids
+          AND anchor.co_code = $co_code
+          AND mention.co_code = $co_code
+          AND mention.source_id IS NOT NULL
+          AND mention.period IS NOT NULL
+          AND mention.data_version IS NOT NULL
+        MATCH path=(anchor)-[rels*1..{hops}]-(node)
+        WHERE ALL(n IN nodes(path) WHERE n.co_code = $co_code)
+          AND ALL(r IN rels WHERE type(r) IN
+              ['SELLS', 'EXPOSED_TO', 'AFFECTS']
+              AND r.co_code = $co_code
+              AND r.source_id IS NOT NULL
+              AND r.period IS NOT NULL
+              AND r.data_version IS NOT NULL)
+        WITH chunk, path, node, rels, mention
         LIMIT 10
         RETURN chunk.chunk_id AS chunk_id,
                [n IN nodes(path) | coalesce(n.name, n.title, n.co_code)] AS nodes,
@@ -359,7 +391,15 @@ class Neo4jKnowledgeRepository:
                chunk.paragraph_id AS paragraph_id,
                chunk.captured_at AS captured_at,
                chunk.content_hash AS content_hash,
-               chunk.data_version AS data_version
+               chunk.data_version AS data_version,
+               [r IN [mention] + rels | {{
+                   type: type(r),
+                   co_code: r.co_code,
+                   source_id: r.source_id,
+                   period: r.period,
+                   data_version: r.data_version,
+                   provenance_text: r.provenance_text
+               }}] AS relationship_provenance
         """
 
         def run() -> list[dict[str, Any]]:
@@ -404,6 +444,9 @@ class Neo4jKnowledgeRepository:
                     metadata={
                         "hops": len(relationships),
                         "retriever": "vector_seeded_bounded_cypher",
+                        "relationship_provenance": row.get(
+                            "relationship_provenance", []
+                        ),
                     },
                 )
             )

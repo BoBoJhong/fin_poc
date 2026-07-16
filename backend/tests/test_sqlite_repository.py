@@ -25,6 +25,7 @@ async def test_sqlite_repository_is_scoped_and_recheckable(tmp_path) -> None:
     )
 
     assert {item.co_code for item in companies} == {"DEMO01", "DEMO02"}
+    assert "範科" in next(item for item in companies if item.co_code == "DEMO01").aliases
     assert len(evidence) == 2
     assert all(item.co_code == "DEMO01" for item in evidence)
     assert all(item.locator.primary_key for item in evidence)
