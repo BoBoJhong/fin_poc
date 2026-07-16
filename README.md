@@ -1,0 +1,136 @@
+# Financial GraphRAG MCP PoC（純本機版）
+
+這是一套可直接在本機執行的金融問答 PoC：React Chatbot 經 FastAPI／SSE 呼叫 LangGraph，Main Agent 只會路由到 Knowledge／GraphRAG 與 Finance DB 兩個受控 Subagent；工具透過本機 MCP 呼叫 Neo4j GraphRAG 與 SQLite，Ollama Qwen 只負責 Embedding，公司 LLM API 負責路由、Evidence 驗證與答案生成。所有答案均帶 Citation、來源定位與 Trace ID。
+
+本專案不需要 Docker，也不會在 Chat Runtime 連線 MariaDB。既有 MariaDB 資料請先放在本機 SQLite；公司 API／DB 規格文件只作為開發 Mapping 參考，不進入 Runtime RAG。
+
+## 1. 系統需求
+
+- Python 3.11+
+- Node.js 20+
+- 本機 Neo4j（Live 模式需要，Bolt 預設 `127.0.0.1:7687`）
+- 本機 Ollama 與 Qwen Embedding（Live 模式需要，預設 `127.0.0.1:11434`）
+- 已存在的本機 SQLite；若只跑 Demo 可用初始化指令建立
+
+## 2. 第一次安裝
+
+在專案根目錄執行：
+
+```bash
+cp .env.example .env
+python -m venv .venv
+.venv/bin/python -m pip install -U pip
+.venv/bin/python -m pip install -e './backend[dev]'
+npm --prefix frontend ci
+```
+
+Windows PowerShell 請將 `.venv/bin/python` 換成 `.venv/Scripts/python.exe`。
+
+## 3. 立即執行 Demo
+
+`.env` 保持 `DATA_MODE=mock` 與 `COMPANY_LLM_MODE=mock`，然後：
+
+```bash
+.venv/bin/python backend/scripts/run_local.py
+```
+
+- Chat UI：<http://127.0.0.1:5173>
+- FastAPI Swagger：<http://127.0.0.1:8000/docs>
+- Knowledge MCP：<http://127.0.0.1:8001/mcp>
+- Finance MCP：<http://127.0.0.1:8002/mcp>
+
+`Ctrl+C` 會一起停止四個本機 Process。
+
+## 4. 使用既有 SQLite 與本機 GraphRAG
+
+1. 將 `.env` 改為 `DATA_MODE=local`。
+2. `SQLITE_PATH` 指向你已經抓好的 SQLite 檔案；相對路徑以專案根目錄為準。
+3. 設定實際 `ALLOWED_CO_CODES`、Neo4j、Ollama 與公司 LLM API。
+4. 確認 SQLite 至少有 `companies`、`data_sources`、`financial_metrics` 三張表；若實際 Schema 不同，只需修改 `SQLiteFinanceRepository` Adapter。
+5. 若 Neo4j 尚未建立 Demo Graph，可在 Ollama 與 Neo4j 已啟動後執行初始化。
+
+```bash
+ollama pull qwen3-embedding
+.venv/bin/python -m scripts.init_data
+.venv/bin/python backend/scripts/run_local.py
+```
+
+執行 `python -m scripts.init_data` 時目前目錄需為 `backend/`；或使用：
+
+```bash
+cd backend
+../.venv/bin/python -m scripts.init_data
+```
+
+公司 LLM 若相容 OpenAI Chat Completions，設定：
+
+```dotenv
+COMPANY_LLM_MODE=openai_compatible
+COMPANY_LLM_BASE_URL=https://your-company-api.example/v1
+COMPANY_LLM_API_KEY=replace-me
+COMPANY_LLM_MODEL=your-model
+```
+
+## 5. 建立 Demo SQLite（不會覆蓋既有資料）
+
+只有在沒有 SQLite 時才需要：
+
+```bash
+cd backend
+../.venv/bin/python -m scripts.init_sqlite --seed-demo
+```
+
+若你已有資料，請不要執行這一步，直接設定 `SQLITE_PATH`。
+
+## 6. API
+
+```bash
+curl http://127.0.0.1:8000/api/v1/companies
+
+curl -X POST http://127.0.0.1:8000/api/v1/chat \
+  -H 'Content-Type: application/json' \
+  -H 'X-User-Id: poc-user' \
+  -H 'X-Co-Code: DEMO01' \
+  -d '{"query":"2026 Q2 營收和主要風險？","co_code":"DEMO01"}'
+```
+
+來源回查：
+
+```bash
+curl 'http://127.0.0.1:8000/api/v1/sources/demo01-financial-metrics-2026q2?co_code=DEMO01' \
+  -H 'X-Co-Code: DEMO01'
+```
+
+## 7. 驗證
+
+```bash
+cd backend
+../.venv/bin/pytest -q
+../.venv/bin/python -m scripts.evaluate
+cd ../frontend
+npm run build
+```
+
+## 8. 主要替換點
+
+| 需求 | 檔案 |
+| --- | --- |
+| SQLite Schema／欄位 Mapping | `backend/app/repositories.py` |
+| 公司 LLM API Contract | `backend/app/llm.py` |
+| Neo4j Label／Relationship／Cypher | `backend/app/repositories.py`、`backend/scripts/init_data.py` |
+| Agent Route 與驗證流程 | `backend/app/agents.py` |
+| API／IAM Header | `backend/app/main.py` |
+| MCP Tool Contract | `backend/mcp_servers/` |
+
+完整設計、初版差異與開發銜接請見 [ARCHITECTURE.md](ARCHITECTURE.md)。
+
+公司機密規格不需要放入本專案。請複製
+`docs/PRIVATE_SPEC_REFERENCES.example.md` 為 `docs/PRIVATE_SPEC_REFERENCES.md`，只填公司內部文件編號、版本與程式替換點；實際私密引用檔已加入 `.gitignore`。
+
+## 9. 已知邊界
+
+- `X-User-Id`／`X-Co-Code` 是 PoC Scope，正式環境需換成公司 IAM Claim。
+- `ALLOWED_CO_CODES` 必須與 SQLite／Neo4j 的 `co_code` 一致。
+- 不接受模型生成的任意 SQL 或 Cypher。
+- Live URL 可能禁止 iframe；Source Inspector 仍以快照、段落、Graph Path 或 SQLite Record 為稽核依據。
+- Forecast 與 PowerPoint 未納入核心 PoC。

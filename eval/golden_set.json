@@ -1,0 +1,26 @@
+[
+  {
+    "id": "mixed-financial-risk",
+    "co_code": "DEMO01",
+    "query": "範例科技 2026 Q2 的營收和毛利率是多少？主要風險是什麼？",
+    "expected_routes": ["knowledge", "finance"],
+    "expected_source_ids": [
+      "demo01-financial-metrics-2026q2",
+      "demo01-2026q2-call"
+    ]
+  },
+  {
+    "id": "graph-product-risk",
+    "co_code": "DEMO01",
+    "query": "範例科技的產品和營運風險有什麼關聯？",
+    "expected_routes": ["knowledge"],
+    "expected_source_ids": ["demo01-2026q2-call"]
+  },
+  {
+    "id": "transcript-risk",
+    "co_code": "DEMO01",
+    "query": "法說會中財務長對下半年風險說了什麼？",
+    "expected_routes": ["knowledge"],
+    "expected_source_ids": ["demo01-2026q2-call"]
+  }
+]

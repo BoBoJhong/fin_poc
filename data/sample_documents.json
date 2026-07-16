@@ -1,0 +1,19 @@
+{
+  "notice": "All records in this file are synthetic and for PoC testing only.",
+  "companies": [
+    {"co_code": "DEMO01", "name": "範例科技股份有限公司"},
+    {"co_code": "DEMO02", "name": "示範製造股份有限公司"}
+  ],
+  "sources": [
+    {
+      "source_id": "demo01-2026q2-call",
+      "co_code": "DEMO01",
+      "period": "2026Q2",
+      "source_type": "transcript",
+      "paragraph_id": "p-18",
+      "timestamp": "00:12:31",
+      "text": "財務長表示，下半年主要不確定性包括海外專案驗收遞延、匯率波動，以及雲端基礎設施成本上升；公司尚未因此調整全年展望。"
+    }
+  ]
+}
+
