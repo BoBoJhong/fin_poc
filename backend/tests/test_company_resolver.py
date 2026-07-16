@@ -4,8 +4,8 @@ import pytest
 
 from app.company_resolver import (
     CompanyResolutionError,
-    enforce_company_scope,
     find_company_mentions,
+    resolve_company_scope,
 )
 from app.config import Settings
 from app.llm import CompanyLLMClient
@@ -32,14 +32,13 @@ def test_resolves_full_name_alias_and_code() -> None:
     assert find_company_mentions("DEMO01 風險", COMPANIES)[0].co_code == "DEMO01"
 
 
-def test_rejects_different_or_multiple_company_mentions() -> None:
+def test_explicit_company_overrides_default_and_ambiguous_matches_are_rejected() -> None:
     other = find_company_mentions("示範製造的營收", COMPANIES)
-    with pytest.raises(CompanyResolutionError, match="目前選擇"):
-        enforce_company_scope("DEMO01", other)
+    assert resolve_company_scope("DEMO01", other) == "DEMO02"
 
     multiple = find_company_mentions("比較範例科技與示範製造", COMPANIES)
-    with pytest.raises(CompanyResolutionError, match="多家公司"):
-        enforce_company_scope("DEMO01", multiple)
+    with pytest.raises(CompanyResolutionError, match="多個候選"):
+        resolve_company_scope("DEMO01", multiple)
 
 
 @pytest.mark.asyncio

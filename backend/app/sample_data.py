@@ -63,6 +63,28 @@ EVIDENCE: list[Evidence] = [
         },
     ),
     Evidence(
+        evidence_id="ev-demo02-metric-revenue",
+        co_code="DEMO02",
+        source_id="demo02-financial-metrics-2026q2",
+        source_type=SourceType.DATABASE,
+        title="示範製造 2026 Q2 財務指標（虛構）",
+        content="2026 Q2 單季合併營收為新台幣 76.2 億元。",
+        score=1.0,
+        period="2026Q2",
+        locator=SourceLocator(
+            table="financial_metrics",
+            primary_key="DEMO02|2026Q2|revenue",
+            columns=["co_code", "period", "metric_code", "value", "unit"],
+        ),
+        metadata={
+            "metric_code": "revenue",
+            "value": 76.2,
+            "unit": "TWD_100M",
+            "scope": "consolidated_quarter",
+            "is_synthetic": True,
+        },
+    ),
+    Evidence(
         evidence_id="ev-demo01-call-risk",
         co_code="DEMO01",
         source_id="demo01-2026q2-call",
@@ -171,6 +193,26 @@ SOURCE_PREVIEWS: dict[str, SourcePreview] = {
         locator=SourceLocator(paragraph_id="p-18", timestamp="00:12:31"),
         captured_at="2026-07-10T10:00:00+08:00",
         content_hash="sha256:demo01-call-p18-v1",
+    ),
+    "demo02-financial-metrics-2026q2": SourcePreview(
+        source_id="demo02-financial-metrics-2026q2",
+        co_code="DEMO02",
+        source_type=SourceType.DATABASE,
+        title="示範製造 2026 Q2 財務指標（虛構）",
+        database_record={
+            "table": "financial_metrics",
+            "records": [
+                {
+                    "co_code": "DEMO02",
+                    "period": "2026Q2",
+                    "metric_code": "revenue",
+                    "value": 76.2,
+                    "unit": "TWD_100M",
+                }
+            ],
+            "data_version": "demo-v1",
+            "is_synthetic": True,
+        },
     ),
     "demo01-2026q2-report": SourcePreview(
         source_id="demo01-2026q2-report",

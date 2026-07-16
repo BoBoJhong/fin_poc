@@ -77,21 +77,32 @@ def seed_demo(connection: sqlite3.Connection) -> None:
             ("DEMO02", "示範製造股份有限公司", "智慧製造", 1, now),
         ],
     )
-    connection.execute(
+    connection.executemany(
         """
         INSERT OR REPLACE INTO data_sources
             (source_id, co_code, source_type, title, captured_at, content_hash, data_version)
         VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
-        (
-            "demo01-financial-metrics-2026q2",
-            "DEMO01",
-            "database",
-            "範例科技 2026 Q2 財務指標（虛構）",
-            now,
-            "sha256:demo01-metrics-v1",
-            "demo-v1",
-        ),
+        [
+            (
+                "demo01-financial-metrics-2026q2",
+                "DEMO01",
+                "database",
+                "範例科技 2026 Q2 財務指標（虛構）",
+                now,
+                "sha256:demo01-metrics-v1",
+                "demo-v1",
+            ),
+            (
+                "demo02-financial-metrics-2026q2",
+                "DEMO02",
+                "database",
+                "示範製造 2026 Q2 財務指標（虛構）",
+                now,
+                "sha256:demo02-metrics-v1",
+                "demo-v1",
+            ),
+        ],
     )
     connection.executemany(
         """
@@ -121,6 +132,11 @@ def seed_demo(connection: sqlite3.Connection) -> None:
             (
                 "DEMO01", "2026Q2", "gross_margin", 42.1, "PERCENT",
                 "consolidated_quarter", "demo01-financial-metrics-2026q2",
+                "demo-v1", now,
+            ),
+            (
+                "DEMO02", "2026Q2", "revenue", 76.2, "TWD_100M",
+                "consolidated_quarter", "demo02-financial-metrics-2026q2",
                 "demo-v1", now,
             ),
         ],

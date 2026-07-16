@@ -1,0 +1,13 @@
+.DS_Store
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+frontend/node_modules/
+frontend/dist/
+
+data/local/*.sqlite*
+docs/PRIVATE_SPEC_REFERENCES.md

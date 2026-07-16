@@ -66,7 +66,8 @@ async def main() -> None:
         recall = len(actual_sources & expected_sources) / max(len(expected_sources), 1)
         route_match = set(answer.routes) == set(case["expected_routes"])
         is_verified = bool(answer.verification.get("passed"))
-        company_scope_match = answer.co_code == case["co_code"]
+        expected_co_code = case.get("expected_co_code", case["co_code"])
+        company_scope_match = answer.co_code == expected_co_code
         case_passed = bool(
             recall == 1.0 and route_match and is_verified and company_scope_match
         )

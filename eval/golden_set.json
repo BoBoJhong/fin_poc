@@ -38,15 +38,11 @@
     "expected_source_ids": ["demo01-financial-metrics-2026q2"]
   },
   {
-    "id": "reject-selected-company-mismatch",
+    "id": "explicit-company-overrides-default",
     "co_code": "DEMO01",
-    "query": "示範製造的營收是多少？",
-    "expected_error": "目前選擇的公司"
-  },
-  {
-    "id": "reject-multiple-companies",
-    "co_code": "DEMO01",
-    "query": "比較範例科技與示範製造的營收",
-    "expected_error": "多家公司"
+    "query": "示範製造 2026 Q2 的營收是多少？",
+    "expected_co_code": "DEMO02",
+    "expected_routes": ["finance"],
+    "expected_source_ids": ["demo02-financial-metrics-2026q2"]
   }
 ]

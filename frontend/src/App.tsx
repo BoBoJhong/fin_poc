@@ -212,6 +212,7 @@ export default function App() {
     setBusy(true);
     try {
       await streamChat(query, coCode, (event) => {
+        if (event.type === "result") setCoCode(event.data.co_code);
         setMessages((current) =>
           current.map((message) => {
             if (message.id !== id) return message;

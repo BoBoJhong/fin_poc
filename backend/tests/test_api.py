@@ -67,3 +67,31 @@ def test_api_rejects_header_body_scope_mismatch() -> None:
             assert response.status_code == 403
     finally:
         app.dependency_overrides.clear()
+
+
+def test_question_company_overrides_ui_default_and_source_is_recheckable() -> None:
+    app.dependency_overrides[get_agent_service] = mock_service
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/chat",
+                headers={"X-Co-Code": "DEMO01"},
+                json={
+                    "query": "示範製造 2026 Q2 的營收是多少？",
+                    "co_code": "DEMO01",
+                },
+            )
+            assert response.status_code == 200
+            body = response.json()
+            assert body["co_code"] == "DEMO02"
+            assert body["citations"][0]["source_id"].startswith("demo02-")
+
+            source = client.get(
+                "/api/v1/sources/demo02-financial-metrics-2026q2",
+                headers={"X-Co-Code": body["co_code"]},
+                params={"co_code": body["co_code"]},
+            )
+            assert source.status_code == 200
+            assert source.json()["co_code"] == "DEMO02"
+    finally:
+        app.dependency_overrides.clear()

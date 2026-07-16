@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from langgraph.graph import END, START, StateGraph
 
-from app.company_resolver import CompanyResolutionError, enforce_company_scope
+from app.company_resolver import CompanyResolutionError, resolve_company_scope
 from app.llm import CompanyLLMClient
 from app.mcp_gateway import MCPGateway
 from app.models import ChatResponse, Citation, Evidence
@@ -65,7 +65,7 @@ class FinancialAgentService:
         return builder.compile()
 
     async def _scope_node(self, state: AgentState) -> AgentState:
-        scoped = self.validator.validate_scope(state["co_code"])
+        selected_code = self.validator.validate_scope(state["co_code"])
         mentioned_companies = await self.gateway.resolve_company(state["query"])
         resolution_method = "company_master"
         resolution_status = "matched" if mentioned_companies else "not_mentioned"
@@ -85,7 +85,8 @@ class FinancialAgentService:
                 )
             if resolution_status == "ambiguous" and len(mentioned_companies) < 2:
                 raise CompanyResolutionError("公司名稱不明確；請改用正式名稱或代碼")
-        scoped = enforce_company_scope(scoped, mentioned_companies)
+        scoped = resolve_company_scope(selected_code, mentioned_companies)
+        scoped = self.validator.validate_scope(scoped)
         match = re.search(r"(20\d{2})\s*[-_/ ]?Q([1-4])", state["query"], re.IGNORECASE)
         period = f"{match.group(1)}Q{match.group(2)}" if match else None
         return {
@@ -98,6 +99,8 @@ class FinancialAgentService:
                 "status": resolution_status,
                 "reason": resolution_reason,
                 "co_code": scoped,
+                "selected_co_code": selected_code,
+                "selection_overridden": scoped != selected_code,
                 "mentioned_co_codes": [
                     company.co_code for company in mentioned_companies
                 ],

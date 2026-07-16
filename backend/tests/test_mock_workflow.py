@@ -37,9 +37,13 @@ async def test_mixed_question_uses_bounded_subagents() -> None:
 
 
 @pytest.mark.asyncio
-async def test_company_code_mismatch_is_rejected() -> None:
-    with pytest.raises(ValueError, match="目前選擇"):
-        await service().answer("請分析 DEMO02 的營收", "DEMO01")
+async def test_explicit_company_routes_to_resolved_scope() -> None:
+    result = await service().answer("示範製造 2026 Q2 的營收", "DEMO01")
+    assert result.co_code == "DEMO02"
+    assert result.verification["company_resolution"]["selection_overridden"] is True
+    assert {citation.source_id for citation in result.citations} == {
+        "demo02-financial-metrics-2026q2"
+    }
 
 
 @pytest.mark.asyncio
@@ -52,14 +56,8 @@ async def test_company_alias_is_resolved_before_retrieval() -> None:
 
 
 @pytest.mark.asyncio
-async def test_multiple_company_question_is_rejected() -> None:
-    with pytest.raises(ValueError, match="多家公司"):
-        await service().answer("比較範例科技與示範製造的營收", "DEMO01")
-
-
-@pytest.mark.asyncio
 async def test_empty_company_data_does_not_hallucinate() -> None:
-    result = await service().answer("2026 Q2 營收是多少？", "DEMO02")
+    result = await service().answer("2025 Q1 營收是多少？", "DEMO02")
     assert result.citations == []
     assert "找不到" in result.answer
     assert result.verification["passed"] is False

@@ -93,13 +93,13 @@ flowchart LR
     M -->|唯一命中| S["Deterministic scope check"]
     M -->|未命中| L["Company LLM<br/>只能選主檔候選"]
     L --> S
-    S -->|與 selected co_code 一致| R["Retrieval"]
-    S -->|不同／多家公司／unknown| X["拒絕查詢並要求明確公司"]
+    S -->|唯一且位於允許主檔| R["以解析後 co_code Retrieval"]
+    S -->|非唯一／unknown| X["拒絕查詢並檢查 Company Master"]
 ```
 
 - 問題沒有提到公司時，沿用 UI／API 選定的 `co_code`。
-- 問題提到一家公司時，解析結果必須與選定的 `co_code` 一致，否則在 Retrieval 前拒絕。
-- 問題同時提到多家公司時，目前拒絕並要求一次查一家；跨公司比較須等公司規格明確後另行開放。
+- 問題提到一家公司時，唯一解析結果成為實際查詢 `co_code`；若與 UI 選項不同，Response 回傳解析後代碼並讓 UI 同步切換。
+- 產品契約規定每個問題只針對一家公司；若 Resolver 得到多個候選，視為 Alias／Company Master 歧義並停止 Retrieval，不視為跨公司查詢需求。
 - LLM 回傳的代碼必須存在於允許的 Company Master；未知或自行生成的代碼不能進入 Retrieval。
 - SQLite、Neo4j Vector、Graph Path 與 Source Preview 都再次使用已確認的同一 `co_code`，不只依賴 Resolver。
 
@@ -297,7 +297,7 @@ Source Preview 不依賴獨立 Local Source Store；由 Knowledge MCP 讀取 Neo
 - 金融關鍵數字可核對率必須為 100%。
 - 無證據正確拒答率初始目標 95% 以上。
 - 必須包含 Alias 衝突、跨公司、Prompt Injection 文件與各依賴故障案例。
-- 公司正式名稱、簡稱、Alias 與 `co_code` 必須解析至同一公司；未知、歧義或與 UI 選定公司不同時不得開始 Retrieval。
+- 公司正式名稱、簡稱、Alias 與 `co_code` 必須解析至同一公司；唯一命中可覆寫 UI 預設公司，未知或歧義時不得開始 Retrieval。
 - 跨 `co_code` Evidence 必須為 0。
 - 每個事實 Claim 必須引用實際支持它的 Evidence；數字只存在於其他未引用 Evidence 時必須驗證失敗。
 - Vector-only 與 GraphRAG 必須保存對照結果；GraphRAG 對關聯題型的正確率或 Recall 必須有可量測改善，否則不得僅以架構存在作為成功。
@@ -675,7 +675,7 @@ MCP_ENABLED=true
 | 前端公司選單 | 從 API 動態載入，不再只依賴硬編碼選項 | `frontend/src/api.ts`、`frontend/src/App.tsx` |
 | SQLite 初始化 | 提供 Demo Schema／Seed；既有 SQLite 不需要重新建立 | `backend/scripts/init_sqlite.py` |
 | 純本機啟動 | 一個 Python Launcher 管理 FastAPI、兩個 MCP 與 Vite | `backend/scripts/run_local.py` |
-| 測試與 Golden Set | 新增正式名稱／Alias／代碼、錯公司、多公司、Graph Scope 與 Claim-Citation 負向案例 | `backend/tests/`、`eval/golden_set.json` |
+| 測試與 Golden Set | 新增正式名稱／Alias／代碼、單一公司自動切換、Resolver 歧義防呆、Graph Scope 與 Claim-Citation 負向案例 | `backend/tests/`、`eval/golden_set.json` |
 
 ### 20.2 本機 Process 拓撲
 
