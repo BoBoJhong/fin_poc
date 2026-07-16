@@ -43,6 +43,8 @@ def test_chat_and_source_preview_api() -> None:
             body = response.json()
             assert body["verification"]["passed"] is True
             assert body["citations"]
+            assert body["citations"][0]["co_code"] == "DEMO01"
+            assert body["citations"][0]["quoted_text"]
 
             source = client.get(
                 "/api/v1/sources/demo01-financial-metrics-2026q2",
@@ -84,7 +86,9 @@ def test_question_company_overrides_ui_default_and_source_is_recheckable() -> No
             assert response.status_code == 200
             body = response.json()
             assert body["co_code"] == "DEMO02"
+            assert body["citations"][0]["co_code"] == "DEMO02"
             assert body["citations"][0]["source_id"].startswith("demo02-")
+            assert "76.2" in body["citations"][0]["quoted_text"]
 
             source = client.get(
                 "/api/v1/sources/demo02-financial-metrics-2026q2",

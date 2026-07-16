@@ -265,10 +265,12 @@ class FinancialAgentService:
             Citation(
                 index=index,
                 evidence_id=item.evidence_id,
+                co_code=item.co_code,
                 source_id=item.source_id,
                 title=item.title,
                 source_type=item.source_type,
                 locator=item.locator,
+                quoted_text=item.content,
             )
             for index, item in enumerate(evidence, start=1)
             if index in cited_indices

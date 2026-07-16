@@ -45,10 +45,12 @@ class Evidence(BaseModel):
 class Citation(BaseModel):
     index: int
     evidence_id: str
+    co_code: str
     source_id: str
     title: str
     source_type: SourceType
     locator: SourceLocator
+    quoted_text: str
 
 
 class ChatRequest(BaseModel):

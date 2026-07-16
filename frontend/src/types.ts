@@ -18,10 +18,12 @@ export interface SourceLocator {
 export interface Citation {
   index: number;
   evidence_id: string;
+  co_code: string;
   source_id: string;
   title: string;
   source_type: SourceType;
   locator: SourceLocator;
+  quoted_text: string;
 }
 
 export interface ChatResult {
@@ -56,4 +58,3 @@ export type StreamEvent =
   | { type: "status"; data: { stage: string; message: string } }
   | { type: "token"; data: { text: string } }
   | { type: "result"; data: ChatResult };
-

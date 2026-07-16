@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { fetchCompanies, fetchSource, streamChat, type CompanySummary } from "./api";
 import type { ChatResult, Citation, SourcePreview } from "./types";
 
@@ -63,12 +63,76 @@ function AnswerText({
   );
 }
 
+interface HighlightRange {
+  start: number;
+  end: number;
+}
+
+function findHighlightRanges(text: string, quotedText?: string): HighlightRange[] {
+  const quote = quotedText?.trim();
+  if (!quote) return [];
+
+  const exactStart = text.indexOf(quote);
+  if (exactStart >= 0) return [{ start: exactStart, end: exactStart + quote.length }];
+
+  const fragments = [...new Set(
+    quote
+      .split(/[，。；;！？!?]/)
+      .map((fragment) => fragment.trim())
+      .filter((fragment) => fragment.length >= 6),
+  )].sort((left, right) => right.length - left.length);
+  const ranges: HighlightRange[] = [];
+  for (const fragment of fragments) {
+    let offset = text.indexOf(fragment);
+    while (offset >= 0) {
+      ranges.push({ start: offset, end: offset + fragment.length });
+      offset = text.indexOf(fragment, offset + fragment.length);
+    }
+  }
+
+  return ranges
+    .sort((left, right) => left.start - right.start)
+    .reduce<HighlightRange[]>((merged, range) => {
+      const previous = merged.at(-1);
+      if (previous && range.start <= previous.end) {
+        previous.end = Math.max(previous.end, range.end);
+      } else {
+        merged.push({ ...range });
+      }
+      return merged;
+    }, []);
+}
+
+function HighlightedSourceText({
+  text,
+  ranges,
+}: {
+  text: string;
+  ranges: HighlightRange[];
+}) {
+  const content: ReactNode[] = [];
+  let cursor = 0;
+  ranges.forEach((range, index) => {
+    if (range.start > cursor) content.push(text.slice(cursor, range.start));
+    content.push(
+      <mark className="source-highlight" key={`${range.start}-${index}`}>
+        {text.slice(range.start, range.end)}
+      </mark>,
+    );
+    cursor = range.end;
+  });
+  if (cursor < text.length) content.push(text.slice(cursor));
+  return <pre className="transcript-preview">{content.length ? content : text}</pre>;
+}
+
 function SourcePanel({
   preview,
+  citation,
   loading,
   error,
 }: {
   preview?: SourcePreview;
+  citation?: Citation;
   loading: boolean;
   error?: string;
 }) {
@@ -88,6 +152,11 @@ function SourcePanel({
     );
   }
 
+  const highlightRanges = preview.text
+    ? findHighlightRanges(preview.text, citation?.quoted_text)
+    : [];
+  const quoteLocated = highlightRanges.length > 0;
+
   return (
     <div className="source-content">
       <div className="source-heading">
@@ -95,6 +164,24 @@ function SourcePanel({
         <h2>{preview.title}</h2>
         <p>{preview.source_id}</p>
       </div>
+
+      {citation && (
+        <section className="citation-note" aria-label="引用附註">
+          <div className="citation-note-heading">
+            <strong>引用附註 [{citation.index}]</strong>
+            <span className={quoteLocated ? "located" : "excerpt-only"}>
+              {quoteLocated ? `已定位 ${highlightRanges.length} 段原文` : "顯示引用摘錄"}
+            </span>
+          </div>
+          <p>
+            回答引用此來源的下列內容；黃色螢光表示在來源全文中實際比對到的文字。
+          </p>
+          <details open={!quoteLocated}>
+            <summary>查看引用摘錄</summary>
+            <blockquote>{citation.quoted_text}</blockquote>
+          </details>
+        </section>
+      )}
 
       {(preview.snapshot_html || preview.live_url) && (
         <div className="preview-tabs">
@@ -125,7 +212,12 @@ function SourcePanel({
           />
         </div>
       )}
-      {preview.text && <pre className="transcript-preview">{preview.text}</pre>}
+      {preview.text && (
+        <section className="original-text-section">
+          <div className="source-section-label">來源原文</div>
+          <HighlightedSourceText text={preview.text} ranges={highlightRanges} />
+        </section>
+      )}
       {preview.database_record && (
         <pre className="record-preview">{JSON.stringify(preview.database_record, null, 2)}</pre>
       )}
@@ -141,6 +233,9 @@ function SourcePanel({
       )}
 
       <dl className="source-meta">
+        {citation?.evidence_id && <><dt>Evidence</dt><dd>{citation.evidence_id}</dd></>}
+        {citation?.co_code && <><dt>公司</dt><dd>{citation.co_code}</dd></>}
+        <dt>Source ID</dt><dd>{preview.source_id}</dd>
         {preview.locator.paragraph_id && <><dt>段落</dt><dd>{preview.locator.paragraph_id}</dd></>}
         {preview.locator.timestamp && <><dt>時間</dt><dd>{preview.locator.timestamp}</dd></>}
         {preview.captured_at && <><dt>擷取時間</dt><dd>{preview.captured_at}</dd></>}
@@ -163,6 +258,7 @@ export default function App() {
     },
   ]);
   const [preview, setPreview] = useState<SourcePreview>();
+  const [activeCitation, setActiveCitation] = useState<Citation>();
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string>();
   const requestId = useRef(0);
@@ -184,10 +280,11 @@ export default function App() {
   );
 
   async function openCitation(citation: Citation) {
+    setActiveCitation(citation);
     setPreviewLoading(true);
     setPreviewError(undefined);
     try {
-      const source = await fetchSource(citation.source_id, coCode);
+      const source = await fetchSource(citation.source_id, citation.co_code);
       setPreview({
         ...source,
         locator: { ...source.locator, ...citation.locator },
@@ -339,7 +436,12 @@ export default function App() {
 
         <aside className="source-panel">
           <div className="panel-title"><span>Source Inspector</span><small>可稽核來源</small></div>
-          <SourcePanel preview={preview} loading={previewLoading} error={previewError} />
+          <SourcePanel
+            preview={preview}
+            citation={activeCitation}
+            loading={previewLoading}
+            error={previewError}
+          />
         </aside>
       </main>
     </div>
