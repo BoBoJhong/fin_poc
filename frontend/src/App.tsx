@@ -20,11 +20,56 @@ interface Message {
   error?: boolean;
 }
 
-const suggestedQuestions = [
-  "範例科技 2026 Q2 的營收和毛利率是多少？主要風險是什麼？",
-  "範例科技的產品和營運風險有什麼 Graph 關聯？",
-  "法說會中財務長對下半年風險說了什麼？",
-];
+const testCases = [
+  {
+    label: "綜合 RAG",
+    expected: "財務＋文件＋Graph，應通過",
+    query: "壓測企業0200 2026 Q2 的營收、毛利率與主要風險？",
+    tone: "pass",
+  },
+  {
+    label: "Graph 關聯",
+    expected: "應回傳產品與風險路徑",
+    query: "壓測企業0120 的產品P0120與供應鏈節點風險R0120有什麼關聯？",
+    tone: "pass",
+  },
+  {
+    label: "股票代碼",
+    expected: "應解析為 TST0050",
+    query: "TST0050 2026 Q2 的營收是多少？",
+    tone: "pass",
+  },
+  {
+    label: "公司 Alias",
+    expected: "應解析為 TST0030",
+    query: "壓企0030 2026 Q2 的毛利率是多少？",
+    tone: "pass",
+  },
+  {
+    label: "期間拒答",
+    expected: "無 2035 Q4 證據，應拒答",
+    query: "壓測企業0020 2035 Q4 的營收是多少？",
+    tone: "reject",
+  },
+  {
+    label: "公司隔離",
+    expected: "DEMO02 無風險文件，應拒答",
+    query: "示範製造有哪些營運風險？",
+    tone: "reject",
+  },
+  {
+    label: "多公司",
+    expected: "應要求一次只指定一家公司",
+    query: "比較壓測企業0001與壓測企業0002的營收",
+    tone: "guard",
+  },
+  {
+    label: "缺少公司",
+    expected: "應要求補充公司名稱或代碼",
+    query: "2026 Q2 的營收是多少？",
+    tone: "guard",
+  },
+] as const;
 
 const sourceLabels: Record<string, string> = {
   financial_report: "財報",
@@ -510,13 +555,27 @@ export default function App() {
           </div>
 
           <div className="composer-zone">
-            {messages.length < 3 && (
-              <div className="suggestions">
-                {suggestedQuestions.map((question) => (
-                  <button key={question} onClick={() => void ask(question)} disabled={busy}>{question}</button>
+            <details className="test-suite" open>
+              <summary>
+                <span>快速測試案例</span>
+                <small>8 項 · 正常、拒答與防護</small>
+              </summary>
+              <div className="test-case-list">
+                {testCases.map((testCase) => (
+                  <button
+                    className={`test-case ${testCase.tone}`}
+                    key={testCase.label}
+                    onClick={() => void ask(testCase.query)}
+                    disabled={busy}
+                    title={testCase.query}
+                    type="button"
+                  >
+                    <b>{testCase.label}</b>
+                    <span>{testCase.expected}</span>
+                  </button>
                 ))}
               </div>
-            )}
+            </details>
             <form className="composer" onSubmit={submit}>
               <textarea
                 ref={textareaRef}

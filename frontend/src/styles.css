@@ -82,10 +82,20 @@ button { cursor: pointer; }
 .unverified { color: #9c4b33; background: #f7e9e4; }
 
 .composer-zone { border-top: 1px solid var(--line); background: #f8faf6; padding: 13px clamp(24px, 6vw, 76px) 17px; }
-.suggestions { display: flex; gap: 7px; overflow-x: auto; margin-bottom: 9px; }
-.suggestions button { min-width: max-content; border: 1px solid #d9e1da; background: #fff; color: #4b5c53; border-radius: 99px; padding: 7px 11px; font-size: 11px; transition: background .15s, border-color .15s, color .15s; }
-.suggestions button:hover:not(:disabled) { background: var(--green-soft); border-color: #a9c0b2; color: var(--green); }
-.suggestions button:disabled { opacity: .5; cursor: not-allowed; }
+.test-suite { margin-bottom: 9px; }
+.test-suite summary { display: flex; align-items: center; gap: 8px; width: max-content; color: #4b5c53; font-size: 11px; font-weight: 700; cursor: pointer; user-select: none; }
+.test-suite summary small { color: #89938e; font-size: 10px; font-weight: 400; }
+.test-suite[open] summary { margin-bottom: 8px; }
+.test-case-list { display: flex; gap: 7px; overflow-x: auto; padding: 1px 1px 5px; scrollbar-width: thin; }
+.test-case { min-width: 174px; max-width: 190px; text-align: left; border: 1px solid #d9e1da; background: #fff; color: #4b5c53; border-radius: 9px; padding: 8px 10px; transition: background .15s, border-color .15s, transform .1s; }
+.test-case b, .test-case span { display: block; }
+.test-case b { margin-bottom: 3px; color: var(--ink); font-size: 11px; }
+.test-case span { color: #7b8780; font-size: 9px; line-height: 1.4; }
+.test-case.pass { border-left: 3px solid #4a9b71; }
+.test-case.reject { border-left: 3px solid #c39646; }
+.test-case.guard { border-left: 3px solid #a96a5d; }
+.test-case:hover:not(:disabled) { background: var(--green-soft); border-color: #a9c0b2; transform: translateY(-1px); }
+.test-case:disabled { opacity: .5; cursor: not-allowed; }
 .composer { display: flex; align-items: flex-end; gap: 8px; border: 1px solid #ccd7cf; background: #fff; border-radius: 14px; padding: 9px; box-shadow: 0 7px 20px rgba(36, 55, 46, .06); }
 .composer:focus-within { border-color: #789b8c; box-shadow: 0 0 0 3px rgba(37, 101, 78, .08); }
 .composer textarea { flex: 1; resize: none; border: 0; outline: 0; min-height: 45px; max-height: 130px; padding: 6px 7px; color: var(--ink); background: transparent; }

@@ -9,6 +9,16 @@ function headers(): HeadersInit {
   };
 }
 
+async function apiError(response: Response): Promise<Error> {
+  const text = await response.text();
+  try {
+    const body = JSON.parse(text) as { detail?: string };
+    return new Error(body.detail || `API error ${response.status}`);
+  } catch {
+    return new Error(text || `API error ${response.status}`);
+  }
+}
+
 export async function streamChat(
   query: string,
   onEvent: (event: StreamEvent) => void,
@@ -19,8 +29,7 @@ export async function streamChat(
     body: JSON.stringify({ query }),
   });
   if (!response.ok || !response.body) {
-    const detail = await response.text();
-    throw new Error(detail || `API error ${response.status}`);
+    throw await apiError(response);
   }
 
   const reader = response.body.getReader();
@@ -68,6 +77,6 @@ export async function fetchSource(
     `${API_BASE}/v1/sources/${encodeURIComponent(sourceId)}?${params}`,
     { headers: headers() },
   );
-  if (!response.ok) throw new Error(await response.text());
+  if (!response.ok) throw await apiError(response);
   return response.json() as Promise<SourcePreview>;
 }
