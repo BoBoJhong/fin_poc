@@ -376,12 +376,19 @@ export default function App() {
     const saved = Number(localStorage.getItem("source-panel-width"));
     return saved >= 320 && saved <= 900 ? saved : 440;
   });
+  const [sourcePanelCollapsed, setSourcePanelCollapsed] = useState(
+    () => localStorage.getItem("source-panel-collapsed") === "true",
+  );
   const [resizing, setResizing] = useState(false);
   const resizeState = useRef<{ startX: number; startWidth: number } | null>(null);
 
   useEffect(() => {
     localStorage.setItem("source-panel-width", String(panelWidth));
   }, [panelWidth]);
+
+  useEffect(() => {
+    localStorage.setItem("source-panel-collapsed", String(sourcePanelCollapsed));
+  }, [sourcePanelCollapsed]);
 
   function beginPanelResize(event: ReactPointerEvent<HTMLDivElement>) {
     resizeState.current = { startX: event.clientX, startWidth: panelWidth };
@@ -421,6 +428,7 @@ export default function App() {
   );
 
   async function openCitation(citation: Citation) {
+    setSourcePanelCollapsed(false);
     setActiveCitation(citation);
     setPreviewLoading(true);
     setPreviewError(undefined);
@@ -508,7 +516,7 @@ export default function App() {
       </header>
 
       <main
-        className={`workspace${resizing ? " resizing" : ""}`}
+        className={`workspace${resizing ? " resizing" : ""}${sourcePanelCollapsed ? " panel-collapsed" : ""}`}
         style={{ "--panel-w": `${panelWidth}px` } as CSSProperties}
       >
         <section className="chat-panel">
@@ -617,22 +625,35 @@ export default function App() {
           onDoubleClick={() => setPanelWidth(440)}
         />
 
-        <aside className="source-panel" ref={sourcePanelRef}>
+        <aside
+          className={`source-panel${sourcePanelCollapsed ? " collapsed" : ""}`}
+          ref={sourcePanelRef}
+        >
           <div className="panel-title">
             <span>Source Inspector</span>
             <div className="panel-title-side">
-              <small>可稽核來源</small>
-              {(preview || previewError) && (
+              {!sourcePanelCollapsed && <small>可稽核來源</small>}
+              {!sourcePanelCollapsed && (preview || previewError) && (
                 <button className="panel-close" onClick={closePreview} aria-label="關閉來源預覽">✕</button>
               )}
+              <button
+                className="panel-toggle"
+                onClick={() => setSourcePanelCollapsed((current) => !current)}
+                aria-label={sourcePanelCollapsed ? "展開來源核對區" : "收合來源核對區"}
+                title={sourcePanelCollapsed ? "展開來源核對區" : "收合來源核對區"}
+              >
+                {sourcePanelCollapsed ? "‹" : "›"}
+              </button>
             </div>
           </div>
-          <SourcePanel
-            preview={preview}
-            citation={activeCitation}
-            loading={previewLoading}
-            error={previewError}
-          />
+          {!sourcePanelCollapsed && (
+            <SourcePanel
+              preview={preview}
+              citation={activeCitation}
+              loading={previewLoading}
+              error={previewError}
+            />
+          )}
         </aside>
       </main>
     </div>
