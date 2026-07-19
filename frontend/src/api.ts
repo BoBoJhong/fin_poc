@@ -1,30 +1,22 @@
 import type { ChatResult, SourcePreview, StreamEvent } from "./types";
 
-export interface CompanySummary {
-  co_code: string;
-  company_name: string;
-  industry?: string;
-}
-
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
-function headers(coCode: string): HeadersInit {
+function headers(): HeadersInit {
   return {
     "Content-Type": "application/json",
     "X-User-Id": "poc-user",
-    "X-Co-Code": coCode,
   };
 }
 
 export async function streamChat(
   query: string,
-  coCode: string,
   onEvent: (event: StreamEvent) => void,
 ): Promise<ChatResult> {
   const response = await fetch(`${API_BASE}/v1/chat/stream`, {
     method: "POST",
-    headers: headers(coCode),
-    body: JSON.stringify({ query, co_code: coCode }),
+    headers: headers(),
+    body: JSON.stringify({ query }),
   });
   if (!response.ok || !response.body) {
     const detail = await response.text();
@@ -74,14 +66,8 @@ export async function fetchSource(
   const params = new URLSearchParams({ co_code: coCode });
   const response = await fetch(
     `${API_BASE}/v1/sources/${encodeURIComponent(sourceId)}?${params}`,
-    { headers: headers(coCode) },
+    { headers: headers() },
   );
   if (!response.ok) throw new Error(await response.text());
   return response.json() as Promise<SourcePreview>;
-}
-
-export async function fetchCompanies(): Promise<CompanySummary[]> {
-  const response = await fetch(`${API_BASE}/v1/companies`);
-  if (!response.ok) throw new Error(await response.text());
-  return response.json() as Promise<CompanySummary[]>;
 }

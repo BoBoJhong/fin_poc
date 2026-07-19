@@ -3,6 +3,8 @@ from __future__ import annotations
 import ast
 import asyncio
 import json
+import logging
+import re
 import sqlite3
 from collections.abc import Iterable
 from typing import Any, Protocol
@@ -10,6 +12,9 @@ from typing import Any, Protocol
 from app.config import Settings
 from app.models import CompanySummary, Evidence, SourceLocator, SourcePreview, SourceType
 from app.sample_data import COMPANIES, EVIDENCE, SOURCE_PREVIEWS, company_name
+
+
+logger = logging.getLogger(__name__)
 
 
 class KnowledgeRepository(Protocol):
@@ -298,13 +303,70 @@ class Neo4jKnowledgeRepository:
     async def search_documents(
         self, query: str, co_code: str, top_k: int = 5
     ) -> list[Evidence]:
+        candidate_k = max(top_k * 4, 20)
         result = await asyncio.to_thread(
             self.vector_retriever.search,
             query_text=query,
-            top_k=top_k,
+            top_k=candidate_k,
             filters={"co_code": {"$eq": co_code}},
         )
-        return [self._vector_item_to_evidence(item) for item in result.items]
+        candidates = [self._vector_item_to_evidence(item) for item in result.items]
+        lexical_ranks = await asyncio.to_thread(
+            self._fulltext_ranks, query, co_code, candidate_k
+        )
+        vector_weight = min(max(self.settings.hybrid_vector_weight, 0.5), 1.0)
+        for item in candidates:
+            lexical_rank = lexical_ranks.get(item.evidence_id)
+            lexical_score = 1.0 / lexical_rank if lexical_rank else 0.0
+            vector_score = item.score
+            item.score = min(
+                1.0,
+                vector_score + (1.0 - vector_score) * (1.0 - vector_weight) * lexical_score,
+            )
+            item.metadata.update(
+                {
+                    "retriever": "scoped_vector_fulltext_hybrid",
+                    "vector_score": vector_score,
+                    "fulltext_rank": lexical_rank,
+                    "hybrid_score": item.score,
+                }
+            )
+        candidates.sort(key=lambda item: item.score, reverse=True)
+        return candidates[:top_k]
+
+    def _fulltext_ranks(self, query: str, co_code: str, limit: int) -> dict[str, int]:
+        """Return lexical ranks only; vector retrieval remains the scoped candidate gate."""
+        terms = re.findall(r"[0-9A-Za-z\u3400-\u9fff]+", query)
+        if not terms:
+            return {}
+        lucene_query = " ".join(terms)
+        cypher = """
+        CALL db.index.fulltext.queryNodes(
+            $index_name, $query, {limit: $candidate_limit}
+        ) YIELD node, score
+        WHERE node.co_code = $co_code
+        RETURN node.chunk_id AS chunk_id, score
+        ORDER BY score DESC
+        LIMIT $limit
+        """
+        try:
+            records, _, _ = self.driver.execute_query(
+                cypher,
+                index_name=self.settings.neo4j_fulltext_index,
+                query=lucene_query,
+                candidate_limit=max(limit * 20, 200),
+                co_code=co_code,
+                limit=limit,
+                database_=self.settings.neo4j_database,
+            )
+        except Exception as exc:  # Full-text is a safe ranking enhancement, not a hard dependency.
+            logger.warning("Full-text retrieval unavailable; using scoped vector results: %s", exc)
+            return {}
+        return {
+            f"ev-neo4j-{record['chunk_id']}": rank
+            for rank, record in enumerate(records, start=1)
+            if record.get("chunk_id")
+        }
 
     @staticmethod
     def _content_as_dict(content: Any) -> dict[str, Any]:

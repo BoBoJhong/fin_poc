@@ -2,6 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,7 +20,8 @@ class Settings(BaseSettings):
     app_env: str = "development"
     data_mode: Literal["mock", "local"] = "mock"
     mcp_enabled: bool = True
-    allowed_co_codes: str = "DEMO01,DEMO02"
+    # "*" means every company present in the local company master is in scope.
+    allowed_co_codes: str = "*"
 
     sqlite_path: str = "data/local/financial.sqlite3"
     sqlite_read_only: bool = True
@@ -30,6 +32,11 @@ class Settings(BaseSettings):
     neo4j_database: str = "neo4j"
     neo4j_vector_index: str = "chunk_embedding_v1"
     neo4j_fulltext_index: str = "chunk_fulltext_v1"
+    document_min_relevance_score: float = Field(default=0.60, ge=0, le=1)
+    graph_min_relevance_score: float = Field(default=0.70, ge=0, le=1)
+    max_evidence_items: int = Field(default=8, ge=1, le=20)
+    require_document_provenance: bool = True
+    hybrid_vector_weight: float = Field(default=0.75, ge=0.5, le=1)
 
     ollama_url: str = "http://127.0.0.1:11434"
     ollama_embedding_model: str = "qwen3-embedding"
@@ -56,11 +63,17 @@ class Settings(BaseSettings):
 
     @property
     def allowed_co_code_set(self) -> set[str]:
+        if self.allowed_co_codes.strip() == "*":
+            return set()
         return {
             value.strip().upper()
             for value in self.allowed_co_codes.split(",")
             if value.strip()
         }
+
+    def is_company_allowed(self, co_code: str) -> bool:
+        allowed = self.allowed_co_code_set
+        return not allowed or co_code.strip().upper() in allowed
 
 
 @lru_cache

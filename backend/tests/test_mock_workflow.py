@@ -25,12 +25,13 @@ def service() -> FinancialAgentService:
 async def test_mixed_question_uses_bounded_subagents() -> None:
     result = await service().answer(
         "範例科技 2026 Q2 的營收和毛利率是多少？主要風險是什麼？",
-        "DEMO01",
     )
     assert set(result.routes) == {"knowledge", "finance"}
     assert result.verification["passed"] is True
     assert result.verification["evidence"]["passed"] is True
     assert result.verification["answer"]["passed"] is True
+    assert result.verification["reliability_policy"]["accepted"] is True
+    assert result.verification["reliability_policy"]["level"] == "high_guardrail_pass"
     assert result.citations
     assert all(citation.source_id.startswith("demo01-") for citation in result.citations)
     assert result.data_versions == ["demo-v1"]
@@ -48,7 +49,7 @@ async def test_explicit_company_routes_to_resolved_scope() -> None:
 
 @pytest.mark.asyncio
 async def test_company_alias_is_resolved_before_retrieval() -> None:
-    result = await service().answer("範科 2026 Q2 的營收是多少？", "DEMO01")
+    result = await service().answer("範科 2026 Q2 的營收是多少？")
     resolution = result.verification["company_resolution"]
     assert resolution["passed"] is True
     assert resolution["method"] == "company_master"
@@ -57,7 +58,8 @@ async def test_company_alias_is_resolved_before_retrieval() -> None:
 
 @pytest.mark.asyncio
 async def test_empty_company_data_does_not_hallucinate() -> None:
-    result = await service().answer("2025 Q1 營收是多少？", "DEMO02")
+    result = await service().answer("示範製造 2025 Q1 營收是多少？")
     assert result.citations == []
     assert "找不到" in result.answer
     assert result.verification["passed"] is False
+    assert result.verification["reliability_policy"]["accepted"] is False

@@ -1,6 +1,15 @@
-import { FormEvent, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { fetchCompanies, fetchSource, streamChat, type CompanySummary } from "./api";
-import type { ChatResult, Citation, SourcePreview } from "./types";
+import {
+  FormEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
+import { fetchSource, streamChat } from "./api";
+import type { ChatResult, Citation, SourceLocator, SourcePreview } from "./types";
 
 interface Message {
   id: string;
@@ -29,10 +38,14 @@ function AnswerText({
   text,
   citations,
   onCitation,
+  activeCitationId,
+  streaming,
 }: {
   text: string;
   citations: Citation[];
   onCitation: (citation: Citation) => void;
+  activeCitationId?: string;
+  streaming?: boolean;
 }) {
   const parts = text.split(/(\[\d+\]|\*\*[^*]+\*\*)/g);
   return (
@@ -43,7 +56,7 @@ function AnswerText({
           const citation = citations.find((item) => item.index === Number(citationMatch[1]));
           return citation ? (
             <button
-              className="inline-citation"
+              className={`inline-citation${citation.evidence_id === activeCitationId ? " active" : ""}`}
               key={`${part}-${index}`}
               onClick={() => onCitation(citation)}
               title={citation.title}
@@ -59,7 +72,24 @@ function AnswerText({
         }
         return <span key={`${part}-${index}`}>{part}</span>;
       })}
+      {streaming && <span className="stream-cursor" aria-hidden="true" />}
     </div>
+  );
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      className="copy-button"
+      onClick={() => {
+        void navigator.clipboard.writeText(text);
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1600);
+      }}
+    >
+      {copied ? "✓ 已複製" : "複製"}
+    </button>
   );
 }
 
@@ -110,12 +140,25 @@ function HighlightedSourceText({
   text: string;
   ranges: HighlightRange[];
 }) {
+  const firstMarkRef = useRef<HTMLElement>(null);
+  const firstStart = ranges.length ? ranges[0].start : -1;
+
+  useEffect(() => {
+    if (firstStart >= 0) {
+      firstMarkRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [text, firstStart]);
+
   const content: ReactNode[] = [];
   let cursor = 0;
   ranges.forEach((range, index) => {
     if (range.start > cursor) content.push(text.slice(cursor, range.start));
     content.push(
-      <mark className="source-highlight" key={`${range.start}-${index}`}>
+      <mark
+        className="source-highlight"
+        key={`${range.start}-${index}`}
+        ref={index === 0 ? firstMarkRef : undefined}
+      >
         {text.slice(range.start, range.end)}
       </mark>,
     );
@@ -123,6 +166,26 @@ function HighlightedSourceText({
   });
   if (cursor < text.length) content.push(text.slice(cursor));
   return <pre className="transcript-preview">{content.length ? content : text}</pre>;
+}
+
+function LocatorChips({ locator }: { locator: SourceLocator }) {
+  const chips: Array<[string, string]> = [];
+  if (locator.paragraph_id) chips.push(["段落", locator.paragraph_id]);
+  if (locator.page != null) chips.push(["頁", String(locator.page)]);
+  if (locator.timestamp) chips.push(["時間", locator.timestamp]);
+  if (locator.table) chips.push(["資料表", locator.table]);
+  if (locator.primary_key) chips.push(["主鍵", locator.primary_key]);
+  if (!chips.length) return null;
+  return (
+    <span className="locator-chips">
+      {chips.map(([label, value]) => (
+        <span className="locator-chip" key={label}>
+          <b>{label}</b>
+          {value}
+        </span>
+      ))}
+    </span>
+  );
 }
 
 function SourcePanel({
@@ -166,20 +229,26 @@ function SourcePanel({
       </div>
 
       {citation && (
-        <section className="citation-note" aria-label="引用附註">
-          <div className="citation-note-heading">
-            <strong>引用附註 [{citation.index}]</strong>
-            <span className={quoteLocated ? "located" : "excerpt-only"}>
-              {quoteLocated ? `已定位 ${highlightRanges.length} 段原文` : "顯示引用摘錄"}
-            </span>
-          </div>
-          <p>
-            回答引用此來源的下列內容；黃色螢光表示在來源全文中實際比對到的文字。
-          </p>
-          <details open={!quoteLocated}>
-            <summary>查看引用摘錄</summary>
-            <blockquote>{citation.quoted_text}</blockquote>
-          </details>
+        <div className="citation-strip" aria-label="引用出處">
+          <span className="citation-badge">引註 [{citation.index}]</span>
+          <LocatorChips locator={preview.locator} />
+          <span className={`locate-state ${quoteLocated ? "located" : "excerpt-only"}`}>
+            {quoteLocated ? `已定位 ${highlightRanges.length} 段原文` : "未能於原文定位"}
+          </span>
+        </div>
+      )}
+
+      {preview.text && (
+        <section className="reading-pane">
+          <div className="source-section-label">來源原文</div>
+          <HighlightedSourceText text={preview.text} ranges={highlightRanges} />
+        </section>
+      )}
+
+      {citation && !quoteLocated && citation.quoted_text && (
+        <section className="excerpt-fallback">
+          <div className="source-section-label">引用摘錄</div>
+          <blockquote>{citation.quoted_text}</blockquote>
         </section>
       )}
 
@@ -212,12 +281,6 @@ function SourcePanel({
           />
         </div>
       )}
-      {preview.text && (
-        <section className="original-text-section">
-          <div className="source-section-label">來源原文</div>
-          <HighlightedSourceText text={preview.text} ranges={highlightRanges} />
-        </section>
-      )}
       {preview.database_record && (
         <pre className="record-preview">{JSON.stringify(preview.database_record, null, 2)}</pre>
       )}
@@ -246,15 +309,13 @@ function SourcePanel({
 }
 
 export default function App() {
-  const [coCode, setCoCode] = useState("DEMO01");
-  const [companies, setCompanies] = useState<CompanySummary[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
       role: "assistant",
-      text: "請選擇公司並提出財報、法說會、財務數字或關聯問題。所有 DEMO 資料均為虛構。",
+      text: "請在問題中輸入公司名稱、簡稱或股票代碼，再詢問財報、法說會、財務數字或關聯。所有 DEMO 資料均為虛構。",
     },
   ]);
   const [preview, setPreview] = useState<SourcePreview>();
@@ -262,17 +323,52 @@ export default function App() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string>();
   const requestId = useRef(0);
+  const conversationRef = useRef<HTMLDivElement>(null);
+  const stickToBottom = useRef(true);
+  const sourcePanelRef = useRef<HTMLElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [panelWidth, setPanelWidth] = useState(() => {
+    const saved = Number(localStorage.getItem("source-panel-width"));
+    return saved >= 320 && saved <= 900 ? saved : 440;
+  });
+  const [resizing, setResizing] = useState(false);
+  const resizeState = useRef<{ startX: number; startWidth: number } | null>(null);
 
   useEffect(() => {
-    void fetchCompanies()
-      .then((items) => {
-        setCompanies(items);
-        if (items.length && !items.some((item) => item.co_code === coCode)) {
-          setCoCode(items[0].co_code);
-        }
-      })
-      .catch(() => setCompanies([]));
-  }, []);
+    localStorage.setItem("source-panel-width", String(panelWidth));
+  }, [panelWidth]);
+
+  function beginPanelResize(event: ReactPointerEvent<HTMLDivElement>) {
+    resizeState.current = { startX: event.clientX, startWidth: panelWidth };
+    setResizing(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function movePanelResize(event: ReactPointerEvent<HTMLDivElement>) {
+    const state = resizeState.current;
+    if (!state) return;
+    const limit = Math.max(320, Math.round(window.innerWidth * 0.6));
+    setPanelWidth(Math.min(Math.max(state.startWidth + (state.startX - event.clientX), 320), limit));
+  }
+
+  function endPanelResize(event: ReactPointerEvent<HTMLDivElement>) {
+    resizeState.current = null;
+    setResizing(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  useEffect(() => {
+    const node = conversationRef.current;
+    if (node && stickToBottom.current) node.scrollTop = node.scrollHeight;
+  }, [messages]);
+
+  function handleConversationScroll() {
+    const node = conversationRef.current;
+    if (!node) return;
+    stickToBottom.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
+  }
 
   const latestResult = useMemo(
     () => [...messages].reverse().find((message) => message.result)?.result,
@@ -283,6 +379,9 @@ export default function App() {
     setActiveCitation(citation);
     setPreviewLoading(true);
     setPreviewError(undefined);
+    if (window.matchMedia("(max-width: 900px)").matches) {
+      sourcePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
     try {
       const source = await fetchSource(citation.source_id, citation.co_code);
       setPreview({
@@ -296,20 +395,27 @@ export default function App() {
     }
   }
 
+  function closePreview() {
+    setPreview(undefined);
+    setActiveCitation(undefined);
+    setPreviewError(undefined);
+  }
+
   async function ask(rawQuery: string) {
     const query = rawQuery.trim();
     if (!query || busy) return;
     const id = `request-${++requestId.current}`;
+    stickToBottom.current = true;
     setMessages((current) => [
       ...current,
       { id: `${id}-user`, role: "user", text: query },
       { id, role: "assistant", text: "", status: "正在準備檢索…" },
     ]);
     setInput("");
+    if (textareaRef.current) textareaRef.current.style.height = "";
     setBusy(true);
     try {
-      await streamChat(query, coCode, (event) => {
-        if (event.type === "result") setCoCode(event.data.co_code);
+      await streamChat(query, (event) => {
         setMessages((current) =>
           current.map((message) => {
             if (message.id !== id) return message;
@@ -352,50 +458,50 @@ export default function App() {
         </div>
         <div className="topbar-actions">
           <span className="environment"><i />Local PoC</span>
-          <label>
-            公司範圍
-            <select value={coCode} onChange={(event) => setCoCode(event.target.value)} disabled={busy}>
-              {(companies.length
-                ? companies
-                : [{ co_code: coCode, company_name: coCode }]
-              ).map((company) => (
-                <option key={company.co_code} value={company.co_code}>
-                  {company.co_code} · {company.company_name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <span className="environment">全公司主檔</span>
         </div>
       </header>
 
-      <main className="workspace">
+      <main
+        className={`workspace${resizing ? " resizing" : ""}`}
+        style={{ "--panel-w": `${panelWidth}px` } as CSSProperties}
+      >
         <section className="chat-panel">
-          <div className="conversation">
+          <div className="conversation" ref={conversationRef} onScroll={handleConversationScroll}>
             {messages.map((message) => (
               <article className={`message ${message.role} ${message.error ? "error" : ""}`} key={message.id}>
-                <div className="avatar">{message.role === "assistant" ? "AI" : "你"}</div>
+                {message.role === "assistant" && <div className="avatar">AI</div>}
                 <div className="message-body">
-                  <span className="role-label">{message.role === "assistant" ? "Financial Agent" : "User"}</span>
+                  {message.role === "assistant" && <span className="role-label">Financial Agent</span>}
                   {message.status && !message.text && <div className="thinking"><span className="loader" />{message.status}</div>}
                   {message.text && (
                     <AnswerText
                       text={message.text}
                       citations={message.result?.citations || []}
                       onCitation={openCitation}
+                      activeCitationId={activeCitation?.evidence_id}
+                      streaming={Boolean(message.status)}
                     />
                   )}
                   {message.result && (
                     <div className="answer-footer">
                       <div className="citation-list">
                         {message.result.citations.map((citation) => (
-                          <button key={citation.evidence_id} onClick={() => void openCitation(citation)}>
+                          <button
+                            key={citation.evidence_id}
+                            className={citation.evidence_id === activeCitation?.evidence_id ? "active" : ""}
+                            onClick={() => void openCitation(citation)}
+                          >
                             [{citation.index}] {sourceLabels[citation.source_type]}
                           </button>
                         ))}
                       </div>
+                      <div className="answer-tools">
+                        <CopyButton text={message.text} />
                       <span className={message.result.verification.passed ? "verified" : "unverified"}>
-                        {message.result.verification.passed ? "✓ 已通過雙層驗證" : "! 驗證未通過"}
+                        {message.result.verification.passed ? "✓ 已通過可靠度防線" : "! 驗證未通過"}
                       </span>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -413,17 +519,22 @@ export default function App() {
             )}
             <form className="composer" onSubmit={submit}>
               <textarea
+                ref={textareaRef}
                 value={input}
-                onChange={(event) => setInput(event.target.value)}
+                onChange={(event) => {
+                  setInput(event.target.value);
+                  const node = event.target;
+                  node.style.height = "";
+                  node.style.height = `${Math.min(node.scrollHeight, 130)}px`;
+                }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
                     submit(event as unknown as FormEvent);
                   }
                 }}
-                placeholder={`詢問 ${coCode} 的財報、法說會或公司關聯…`}
-                rows={2}
-                disabled={busy}
+                placeholder="輸入公司名稱或股票代碼，例如：範例科技 2026 Q2 營收是多少？"
+                rows={1}
               />
               <button className="send-button" type="submit" disabled={busy || !input.trim()} aria-label="送出問題">↑</button>
             </form>
@@ -434,8 +545,29 @@ export default function App() {
           </div>
         </section>
 
-        <aside className="source-panel">
-          <div className="panel-title"><span>Source Inspector</span><small>可稽核來源</small></div>
+        <div
+          className="panel-resizer"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="拖曳調整來源面板寬度"
+          title="拖曳調整寬度；雙擊還原預設"
+          onPointerDown={beginPanelResize}
+          onPointerMove={movePanelResize}
+          onPointerUp={endPanelResize}
+          onPointerCancel={endPanelResize}
+          onDoubleClick={() => setPanelWidth(440)}
+        />
+
+        <aside className="source-panel" ref={sourcePanelRef}>
+          <div className="panel-title">
+            <span>Source Inspector</span>
+            <div className="panel-title-side">
+              <small>可稽核來源</small>
+              {(preview || previewError) && (
+                <button className="panel-close" onClick={closePreview} aria-label="關閉來源預覽">✕</button>
+              )}
+            </div>
+          </div>
           <SourcePanel
             preview={preview}
             citation={activeCitation}

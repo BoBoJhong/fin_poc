@@ -41,6 +41,11 @@ def test_explicit_company_overrides_default_and_ambiguous_matches_are_rejected()
         resolve_company_scope("DEMO01", multiple)
 
 
+def test_company_is_required_when_there_is_no_legacy_default() -> None:
+    with pytest.raises(CompanyResolutionError, match="無法從問題判斷公司"):
+        resolve_company_scope(None, [])
+
+
 @pytest.mark.asyncio
 async def test_llm_resolution_is_constrained_to_company_master() -> None:
     client = CompanyLLMClient(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Iterable
@@ -36,6 +37,32 @@ def _numbers_in_text(value: str) -> set[str]:
     return {_canonical_number(match) for match in NUMBER_PATTERN.findall(value)}
 
 
+def _semantic_tokens(value: str) -> set[str]:
+    """Produce conservative lexical signals for deterministic claim support checks."""
+    normalized = unicodedata.normalize("NFKC", value).casefold()
+    normalized = CITATION_PATTERN.sub("", normalized)
+    latin = set(re.findall(r"[a-z][a-z0-9_-]{2,}", normalized))
+    han_runs = re.findall(r"[\u3400-\u9fff]+", normalized)
+    han_bigrams = {
+        run[index : index + 2]
+        for run in han_runs
+        for index in range(max(len(run) - 1, 0))
+    }
+    return latin | han_bigrams
+
+
+def _claim_lexically_supported(claim: str, cited: Iterable[Evidence]) -> bool:
+    claim_tokens = _semantic_tokens(claim)
+    if not claim_tokens:
+        return True
+    evidence_tokens: set[str] = set()
+    for item in cited:
+        evidence_tokens.update(_semantic_tokens(item.content))
+    overlap = claim_tokens & evidence_tokens
+    required = 1 if len(claim_tokens) <= 3 else max(2, round(len(claim_tokens) * 0.2))
+    return len(overlap) >= required
+
+
 def _claim_segments(answer: str) -> list[str]:
     """Split an answer at citation groups while keeping each citation with its claim."""
     segments: list[str] = []
@@ -69,10 +96,30 @@ def _requires_citation(claim: str) -> bool:
 @dataclass(slots=True)
 class EvidenceValidator:
     allowed_co_codes: set[str]
+    document_min_relevance_score: float = 0.60
+    graph_min_relevance_score: float = 0.70
+    require_document_provenance: bool = True
+
+    @classmethod
+    def from_settings(cls, settings: object) -> "EvidenceValidator":
+        return cls(
+            allowed_co_codes=getattr(settings, "allowed_co_code_set"),
+            document_min_relevance_score=float(
+                getattr(settings, "document_min_relevance_score", 0.60)
+            ),
+            graph_min_relevance_score=float(
+                getattr(settings, "graph_min_relevance_score", 0.70)
+            ),
+            require_document_provenance=bool(
+                getattr(settings, "require_document_provenance", True)
+            ),
+        )
 
     def validate_scope(self, co_code: str) -> str:
         normalized = co_code.strip().upper()
-        if normalized not in self.allowed_co_codes:
+        if not normalized:
+            raise EvidenceValidationError("co_code 不可為空")
+        if self.allowed_co_codes and normalized not in self.allowed_co_codes:
             raise EvidenceValidationError(f"co_code {normalized!r} 不在允許範圍")
         return normalized
 
@@ -94,6 +141,26 @@ class EvidenceValidator:
                 )
             if not item.source_id or not item.evidence_id:
                 raise EvidenceValidationError("Evidence 缺少 source_id 或 evidence_id")
+            if not item.content.strip():
+                raise EvidenceValidationError("Evidence 內容不可為空")
+            if expected_period and item.period != expected_period:
+                continue
+            if item.source_type == SourceType.GRAPH:
+                if item.score < self.graph_min_relevance_score:
+                    continue
+            elif item.source_type != SourceType.DATABASE:
+                if item.score < self.document_min_relevance_score:
+                    continue
+                if self.require_document_provenance:
+                    has_locator = bool(
+                        item.locator.page is not None
+                        or item.locator.paragraph_id
+                        or item.locator.timestamp
+                    )
+                    if not has_locator or not item.content_hash:
+                        raise EvidenceValidationError(
+                            "文件 Evidence 缺少段落定位或 content_hash"
+                        )
             if item.source_type == SourceType.DATABASE:
                 if not item.locator.table or not item.locator.primary_key:
                     raise EvidenceValidationError("DB Evidence 缺少 table 或 primary key")
@@ -102,10 +169,6 @@ class EvidenceValidator:
                 if missing:
                     raise EvidenceValidationError(
                         f"DB Evidence 缺少財務語意欄位：{sorted(missing)}"
-                    )
-                if expected_period and item.period != expected_period:
-                    raise EvidenceValidationError(
-                        f"DB Evidence 期間不一致：預期 {expected_period}，收到 {item.period}"
                     )
                 key = (
                     item.period or "",
@@ -154,6 +217,7 @@ class EvidenceValidator:
 
         uncited_claims: list[str] = []
         unsupported_numbers: set[str] = set()
+        unsupported_claims: list[str] = []
         claim_checks: list[dict[str, object]] = []
         for claim in _claim_segments(answer):
             claim_citations = {
@@ -171,16 +235,28 @@ class EvidenceValidator:
             missing_numbers = claim_numbers - supported_numbers
             if factual:
                 unsupported_numbers.update(missing_numbers)
+            cited_items = [
+                evidence[index - 1]
+                for index in sorted(valid_citations)
+                if 1 <= index <= len(evidence)
+            ]
+            lexically_supported = not factual or _claim_lexically_supported(
+                claim_without_citations, cited_items
+            )
+            if factual and valid_citations and not lexically_supported:
+                unsupported_claims.append(claim)
             claim_checks.append(
                 {
                     "claim": claim,
                     "citations": sorted(claim_citations),
                     "unsupported_numbers": sorted(missing_numbers),
+                    "lexically_supported": lexically_supported,
                     "passed": not factual
                     or (
                         bool(claim_citations & allowed)
                         and not (claim_citations - allowed)
                         and not missing_numbers
+                        and lexically_supported
                     ),
                 }
             )
@@ -191,6 +267,7 @@ class EvidenceValidator:
             and not invalid
             and not uncited_claims
             and not unsupported_numbers
+            and not unsupported_claims
         )
         return {
             "passed": is_grounded,
@@ -198,11 +275,12 @@ class EvidenceValidator:
             "invalid_indices": invalid,
             "uncited_claims": uncited_claims,
             "unsupported_numbers": sorted(unsupported_numbers),
+            "unsupported_claims": unsupported_claims,
             "claim_checks": claim_checks,
             "evidence_count": len(evidence),
             "reason": (
                 "citations_valid"
                 if is_grounded
-                else "answer_has_invalid_citations_or_unsupported_numbers"
+                else "answer_has_invalid_citations_or_unsupported_claims"
             ),
         }

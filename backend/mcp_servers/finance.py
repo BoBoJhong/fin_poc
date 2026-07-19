@@ -9,7 +9,7 @@ from app.validation import EvidenceValidator
 
 
 settings = get_settings()
-validator = EvidenceValidator(settings.allowed_co_code_set)
+validator = EvidenceValidator.from_settings(settings)
 repository = build_finance_repository(settings)
 mcp = FastMCP(
     "Finance Data MCP",
@@ -21,7 +21,7 @@ mcp = FastMCP(
 async def resolve_company(name_or_code: str) -> dict:
     """Resolve names, aliases, and co_codes against the configured company master."""
     items = await repository.list_companies()
-    allowed = [item for item in items if item.co_code in settings.allowed_co_code_set]
+    allowed = [item for item in items if settings.is_company_allowed(item.co_code)]
     matches = find_company_mentions(name_or_code, allowed)
     return {
         "companies": [item.model_dump(mode="json") for item in matches],
@@ -34,9 +34,9 @@ async def resolve_company(name_or_code: str) -> dict:
 
 @mcp.tool
 async def list_companies() -> dict:
-    """List local companies, filtered by the configured allowlist."""
+    """List companies in the configured scope; '*' exposes the whole company master."""
     items = await repository.list_companies()
-    allowed = [item for item in items if item.co_code in settings.allowed_co_code_set]
+    allowed = [item for item in items if settings.is_company_allowed(item.co_code)]
     return {
         "companies": [item.model_dump(mode="json") for item in allowed],
         "metadata": {"tool": "list_companies"},

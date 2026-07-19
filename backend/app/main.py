@@ -18,20 +18,21 @@ from app.validation import EvidenceValidationError, EvidenceValidator
 
 
 class TenantContext:
-    def __init__(self, user_id: str, co_code: str):
+    def __init__(self, user_id: str, co_code: str | None):
         self.user_id = user_id
         self.co_code = co_code
 
 
 def tenant_context(
     x_user_id: Annotated[str, Header(alias="X-User-Id")] = "poc-user",
-    x_co_code: Annotated[str, Header(alias="X-Co-Code")] = "DEMO01",
+    x_co_code: Annotated[str | None, Header(alias="X-Co-Code")] = None,
     settings: Settings = Depends(get_settings),
 ) -> TenantContext:
-    code = x_co_code.strip().upper()
-    if code not in settings.allowed_co_code_set:
+    code = x_co_code.strip().upper() if x_co_code else None
+    if code and not settings.is_company_allowed(code):
         raise HTTPException(status_code=403, detail="co_code 不在授權範圍")
-    # PoC header only. Production must replace this dependency with company IAM claims.
+    # X-Co-Code remains a backwards-compatible default only. The question normally
+    # determines company scope; production IAM authorization remains a separate layer.
     return TenantContext(user_id=x_user_id, co_code=code)
 
 
@@ -41,7 +42,8 @@ def get_agent_service() -> FinancialAgentService:
     return FinancialAgentService(
         gateway=MCPGateway(settings),
         llm=CompanyLLMClient(settings),
-        validator=EvidenceValidator(settings.allowed_co_code_set),
+        validator=EvidenceValidator.from_settings(settings),
+        max_evidence_items=settings.max_evidence_items,
     )
 
 
@@ -75,10 +77,11 @@ async def companies(
 async def run_answer(
     request: ChatRequest, tenant: TenantContext, service: FinancialAgentService
 ) -> ChatResponse:
-    if request.co_code.strip().upper() != tenant.co_code:
+    request_code = request.co_code.strip().upper() if request.co_code else None
+    if request_code and tenant.co_code and request_code != tenant.co_code:
         raise HTTPException(status_code=403, detail="body 與授權 co_code 不一致")
     try:
-        return await service.answer(request.query, tenant.co_code)
+        return await service.answer(request.query, request_code or tenant.co_code)
     except (EvidenceValidationError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -124,10 +127,13 @@ async def source_preview(
     co_code: Annotated[str, Query(min_length=2, max_length=32)],
     tenant: TenantContext = Depends(tenant_context),
     service: FinancialAgentService = Depends(get_agent_service),
+    settings: Settings = Depends(get_settings),
 ) -> SourcePreview:
-    if co_code.strip().upper() != tenant.co_code:
+    del tenant
+    code = co_code.strip().upper()
+    if not settings.is_company_allowed(code):
         raise HTTPException(status_code=403, detail="來源不在授權公司範圍")
-    preview = await service.gateway.get_source_preview(source_id, tenant.co_code)
+    preview = await service.gateway.get_source_preview(source_id, code)
     if preview is None:
         raise HTTPException(status_code=404, detail="找不到來源")
     return preview

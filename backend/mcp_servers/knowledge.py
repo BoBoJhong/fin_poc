@@ -8,7 +8,7 @@ from app.validation import EvidenceValidator
 
 
 settings = get_settings()
-validator = EvidenceValidator(settings.allowed_co_code_set)
+validator = EvidenceValidator.from_settings(settings)
 repository = build_knowledge_repository(settings)
 mcp = FastMCP(
     "Knowledge MCP",

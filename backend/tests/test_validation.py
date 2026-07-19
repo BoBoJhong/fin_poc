@@ -64,6 +64,34 @@ def test_factual_claim_without_citation_is_rejected() -> None:
     assert result["uncited_claims"] == ["另一個事實"]
 
 
+def test_citation_must_lexically_support_the_claim() -> None:
+    item = evidence()
+    item.content = "公司公告董事會通過現金股利分派案"
+    result = EvidenceValidator.verify_answer("海外專案延遲造成營收下滑 [1]", [item])
+    assert result["passed"] is False
+    assert result["unsupported_claims"] == ["海外專案延遲造成營收下滑 [1]"]
+
+
+def test_low_relevance_and_wrong_period_evidence_are_discarded() -> None:
+    low_score = evidence()
+    low_score.score = 0.2
+    low_score.period = "2026Q2"
+    low_score.content_hash = "sha256:low"
+    wrong_period = evidence()
+    wrong_period.evidence_id = "ev-2"
+    wrong_period.period = "2025Q4"
+    wrong_period.content_hash = "sha256:period"
+    valid = EvidenceValidator({"DEMO01"}).validate_evidence(
+        "DEMO01", [low_score, wrong_period], expected_period="2026Q2"
+    )
+    assert valid == []
+
+
+def test_document_evidence_requires_recheckable_provenance() -> None:
+    with pytest.raises(EvidenceValidationError, match="content_hash"):
+        EvidenceValidator({"DEMO01"}).validate_evidence("DEMO01", [evidence()])
+
+
 def test_graph_evidence_requires_scoped_relationship_provenance() -> None:
     item = evidence()
     item.source_type = SourceType.GRAPH

@@ -15,7 +15,7 @@ from app.validation import EvidenceValidator
 
 class AgentState(TypedDict, total=False):
     query: str
-    co_code: str
+    co_code: str | None
     trace_id: str
     routes: list[str]
     period: str | None
@@ -34,10 +34,12 @@ class FinancialAgentService:
         gateway: MCPGateway,
         llm: CompanyLLMClient,
         validator: EvidenceValidator,
+        max_evidence_items: int = 8,
     ):
         self.gateway = gateway
         self.llm = llm
         self.validator = validator
+        self.max_evidence_items = max(1, min(max_evidence_items, 20))
         self.graph = self._build_graph()
 
     def _build_graph(self):
@@ -65,7 +67,10 @@ class FinancialAgentService:
         return builder.compile()
 
     async def _scope_node(self, state: AgentState) -> AgentState:
-        selected_code = self.validator.validate_scope(state["co_code"])
+        requested_code = state.get("co_code")
+        selected_code = (
+            self.validator.validate_scope(requested_code) if requested_code else None
+        )
         mentioned_companies = await self.gateway.resolve_company(state["query"])
         resolution_method = "company_master"
         resolution_status = "matched" if mentioned_companies else "not_mentioned"
@@ -100,7 +105,7 @@ class FinancialAgentService:
                 "reason": resolution_reason,
                 "co_code": scoped,
                 "selected_co_code": selected_code,
-                "selection_overridden": scoped != selected_code,
+                "selection_overridden": bool(selected_code and scoped != selected_code),
                 "mentioned_co_codes": [
                     company.co_code for company in mentioned_companies
                 ],
@@ -141,6 +146,7 @@ class FinancialAgentService:
             state["co_code"], state.get("evidence", []), state.get("period")
         )
         valid.sort(key=lambda item: item.score, reverse=True)
+        valid = valid[: self.max_evidence_items]
         return {
             "evidence": valid,
             "verification": {
@@ -149,6 +155,9 @@ class FinancialAgentService:
                     "passed": bool(valid),
                     "reason": "evidence_contract_valid" if valid else "no_evidence",
                     "evidence_count": len(valid),
+                    "minimum_document_score": self.validator.document_min_relevance_score,
+                    "minimum_graph_score": self.validator.graph_min_relevance_score,
+                    "max_evidence_items": self.max_evidence_items,
                 }
             },
         }
@@ -196,6 +205,18 @@ class FinancialAgentService:
         verification = state.get("verification", {})
         answer = state["answer"]
         if not evidence:
+            policy = {
+                "accepted": False,
+                "level": "rejected",
+                "gates": {
+                    "company_resolved": bool(
+                        verification.get("company_resolution", {}).get("passed")
+                    ),
+                    "evidence_available": False,
+                    "deterministic_answer_check": False,
+                    "semantic_answer_check": False,
+                },
+            }
             return {
                 "answer": answer,
                 "verification": {
@@ -203,6 +224,7 @@ class FinancialAgentService:
                     "passed": False,
                     "semantic": {"passed": False, "reason": "no_evidence"},
                     "repair_attempted": False,
+                    "reliability_policy": policy,
                 },
             }
         deterministic_passed = bool(verification.get("answer", {}).get("passed"))
@@ -231,6 +253,23 @@ class FinancialAgentService:
         if not passed:
             answer = "來源或答案驗證未通過，因此系統拒絕輸出可能誤導的答案。請查看 Trace ID 後重試。"
 
+        policy = {
+            "accepted": passed,
+            "level": "high_guardrail_pass" if passed else "rejected",
+            "gates": {
+                "company_resolved": bool(
+                    verification.get("company_resolution", {}).get("passed")
+                ),
+                "evidence_available": bool(evidence),
+                "deterministic_answer_check": bool(
+                    verification.get("answer", {}).get("passed")
+                ),
+                "semantic_answer_check": bool(semantic.get("passed")),
+            },
+            "evidence_count": len(evidence),
+            "lowest_evidence_score": min(item.score for item in evidence),
+        }
+
         return {
             "answer": answer,
             "repaired": repaired,
@@ -239,10 +278,11 @@ class FinancialAgentService:
                 "passed": passed,
                 "semantic": semantic,
                 "repair_attempted": repaired,
+                "reliability_policy": policy,
             },
         }
 
-    async def answer(self, query: str, co_code: str) -> ChatResponse:
+    async def answer(self, query: str, co_code: str | None = None) -> ChatResponse:
         trace_id = str(uuid4())
         final: AgentState = await self.graph.ainvoke(
             {

@@ -133,15 +133,13 @@ class MCPGateway:
     async def resolve_company(self, query: str) -> list[CompanySummary]:
         if not self.settings.mcp_enabled:
             items = await self.finance.list_companies()
-            allowed = [
-                item for item in items if item.co_code in self.settings.allowed_co_code_set
-            ]
+            allowed = [item for item in items if self.settings.is_company_allowed(item.co_code)]
             return find_company_mentions(query, allowed)
         payload = await self._call("resolve_company", {"name_or_code": query})
         return [
             CompanySummary.model_validate(item)
             for item in payload.get("companies", [])
-            if item.get("co_code") in self.settings.allowed_co_code_set
+            if self.settings.is_company_allowed(str(item.get("co_code", "")))
         ]
 
     async def list_companies(self) -> list[CompanySummary]:
@@ -154,7 +152,7 @@ class MCPGateway:
                 for item in payload.get("companies", [])
             ]
         return [
-            item for item in items if item.co_code in self.settings.allowed_co_code_set
+            item for item in items if self.settings.is_company_allowed(item.co_code)
         ]
 
     async def get_source_preview(

@@ -30,13 +30,10 @@ def test_chat_and_source_preview_api() -> None:
             assert companies.status_code == 200
             assert companies.json()[0]["co_code"] == "DEMO01"
 
-            headers = {"X-User-Id": "test-user", "X-Co-Code": "DEMO01"}
             response = client.post(
                 "/api/v1/chat",
-                headers=headers,
                 json={
-                    "query": "2026 Q2 的營收和毛利率是多少？",
-                    "co_code": "DEMO01",
+                    "query": "範例科技 2026 Q2 的營收和毛利率是多少？",
                 },
             )
             assert response.status_code == 200
@@ -48,7 +45,6 @@ def test_chat_and_source_preview_api() -> None:
 
             source = client.get(
                 "/api/v1/sources/demo01-financial-metrics-2026q2",
-                headers=headers,
                 params={"co_code": "DEMO01"},
             )
             assert source.status_code == 200
@@ -57,7 +53,7 @@ def test_chat_and_source_preview_api() -> None:
         app.dependency_overrides.clear()
 
 
-def test_api_rejects_header_body_scope_mismatch() -> None:
+def test_api_rejects_legacy_header_body_scope_mismatch() -> None:
     app.dependency_overrides[get_agent_service] = mock_service
     try:
         with TestClient(app) as client:
@@ -77,10 +73,8 @@ def test_question_company_overrides_ui_default_and_source_is_recheckable() -> No
         with TestClient(app) as client:
             response = client.post(
                 "/api/v1/chat",
-                headers={"X-Co-Code": "DEMO01"},
                 json={
                     "query": "示範製造 2026 Q2 的營收是多少？",
-                    "co_code": "DEMO01",
                 },
             )
             assert response.status_code == 200
@@ -92,10 +86,23 @@ def test_question_company_overrides_ui_default_and_source_is_recheckable() -> No
 
             source = client.get(
                 "/api/v1/sources/demo02-financial-metrics-2026q2",
-                headers={"X-Co-Code": body["co_code"]},
                 params={"co_code": body["co_code"]},
             )
             assert source.status_code == 200
             assert source.json()["co_code"] == "DEMO02"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_chat_requires_company_in_question_without_legacy_default() -> None:
+    app.dependency_overrides[get_agent_service] = mock_service
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/chat",
+                json={"query": "2026 Q2 的營收是多少？"},
+            )
+            assert response.status_code == 422
+            assert "輸入公司" in response.json()["detail"]
     finally:
         app.dependency_overrides.clear()

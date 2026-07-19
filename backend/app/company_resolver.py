@@ -48,11 +48,11 @@ def find_company_mentions(query: str, companies: Iterable[CompanySummary]) -> li
 
 
 def resolve_company_scope(
-    default_co_code: str,
+    default_co_code: str | None,
     mentioned_companies: Iterable[CompanySummary],
 ) -> str:
-    """Use one explicit company mention, otherwise retain the selected default scope."""
-    default = default_co_code.strip().upper()
+    """Resolve exactly one mentioned company, with an optional legacy default."""
+    default = default_co_code.strip().upper() if default_co_code else ""
     matches = list(mentioned_companies)
     mentioned_codes = {company.co_code.upper() for company in matches}
 
@@ -63,4 +63,8 @@ def resolve_company_scope(
         )
     if mentioned_codes:
         return next(iter(mentioned_codes))
-    return default
+    if default:
+        return default
+    raise CompanyResolutionError(
+        "無法從問題判斷公司；請輸入公司正式名稱、常用簡稱或股票代碼"
+    )

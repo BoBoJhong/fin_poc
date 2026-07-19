@@ -55,7 +55,8 @@ class Citation(BaseModel):
 
 class ChatRequest(BaseModel):
     query: str = Field(min_length=2, max_length=4000)
-    co_code: str = Field(min_length=2, max_length=32)
+    # Optional for backwards compatibility. New clients identify the company in query.
+    co_code: str | None = Field(default=None, min_length=2, max_length=32)
     conversation_id: str | None = None
 
 

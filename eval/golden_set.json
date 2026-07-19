@@ -44,5 +44,20 @@
     "expected_co_code": "DEMO02",
     "expected_routes": ["finance"],
     "expected_source_ids": ["demo02-financial-metrics-2026q2"]
+  },
+  {
+    "id": "missing-company-is-rejected",
+    "query": "2026 Q2 的營收是多少？",
+    "expected_error": "無法從問題判斷公司"
+  },
+  {
+    "id": "multiple-companies-are-rejected",
+    "query": "比較範例科技與示範製造的營收",
+    "expected_error": "多個候選"
+  },
+  {
+    "id": "missing-period-evidence-refuses-answer",
+    "query": "示範製造 2025 Q1 的營收是多少？",
+    "expected_no_answer": true
   }
 ]

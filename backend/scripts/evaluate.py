@@ -35,7 +35,7 @@ async def main() -> None:
     for case in cases:
         expected_error = case.get("expected_error")
         try:
-            answer = await service.answer(case["query"], case["co_code"])
+            answer = await service.answer(case["query"], case.get("co_code"))
         except ValueError as exc:
             error_matches = bool(expected_error and expected_error in str(exc))
             case_passes += int(error_matches)
@@ -60,13 +60,30 @@ async def main() -> None:
             )
             continue
 
+        if case.get("expected_no_answer"):
+            no_answer = bool(
+                not answer.citations
+                and not answer.verification.get("passed")
+                and "找不到" in answer.answer
+            )
+            case_passes += int(no_answer)
+            results.append(
+                {
+                    "id": case["id"],
+                    "expected_no_answer": True,
+                    "verified": bool(answer.verification.get("passed")),
+                    "case_passed": no_answer,
+                }
+            )
+            continue
+
         answer_cases += 1
         actual_sources = {citation.source_id for citation in answer.citations}
         expected_sources = set(case["expected_source_ids"])
         recall = len(actual_sources & expected_sources) / max(len(expected_sources), 1)
         route_match = set(answer.routes) == set(case["expected_routes"])
         is_verified = bool(answer.verification.get("passed"))
-        expected_co_code = case.get("expected_co_code", case["co_code"])
+        expected_co_code = case.get("expected_co_code", case.get("co_code"))
         company_scope_match = answer.co_code == expected_co_code
         case_passed = bool(
             recall == 1.0 and route_match and is_verified and company_scope_match
