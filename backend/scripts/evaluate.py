@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
 from pathlib import Path
@@ -11,17 +12,19 @@ from app.mcp_gateway import MCPGateway
 from app.validation import EvidenceValidator
 
 
-async def main() -> None:
+async def evaluate(data_mode: str) -> None:
     settings = Settings(
-        data_mode="mock",
+        data_mode=data_mode,
         mcp_enabled=False,
         company_llm_mode="mock",
         allowed_co_codes="DEMO01,DEMO02",
     )
+    gateway = MCPGateway(settings)
     service = FinancialAgentService(
-        gateway=MCPGateway(settings),
+        gateway=gateway,
         llm=CompanyLLMClient(settings),
-        validator=EvidenceValidator(settings.allowed_co_code_set),
+        validator=EvidenceValidator.from_settings(settings),
+        max_evidence_items=settings.max_evidence_items,
     )
     golden_path = Path(__file__).resolve().parents[2] / "eval" / "golden_set.json"
     cases = json.loads(golden_path.read_text(encoding="utf-8"))
@@ -106,6 +109,10 @@ async def main() -> None:
 
     count = len(cases)
     summary = {
+        "data_mode": data_mode,
+        "embedding_model": (
+            settings.ollama_embedding_model if data_mode == "local" else None
+        ),
         "cases": count,
         "answer_cases": answer_cases,
         "case_pass_rate": round(case_passes / count, 3),
@@ -115,7 +122,22 @@ async def main() -> None:
         "results": results,
     }
     print(json.dumps(summary, ensure_ascii=False, indent=2))
+    close = getattr(gateway.knowledge, "close", None)
+    if close:
+        await close()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Evaluate the financial RAG golden set.")
+    parser.add_argument(
+        "--data-mode",
+        choices=("mock", "local"),
+        default="mock",
+        help="Use fixed mock evidence or the configured local SQLite/Neo4j repositories.",
+    )
+    args = parser.parse_args()
+    asyncio.run(evaluate(args.data_mode))
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     hybrid_vector_weight: float = Field(default=0.75, ge=0.5, le=1)
 
     ollama_url: str = "http://127.0.0.1:11434"
-    ollama_embedding_model: str = "qwen3-embedding"
+    ollama_embedding_model: str = "qwen3-embedding:0.6b"
 
     company_llm_mode: Literal["mock", "openai_compatible"] = "mock"
     company_llm_base_url: str = "https://company-llm.example.com/v1"

@@ -11,6 +11,20 @@ from neo4j_graphrag.indexes import create_fulltext_index, create_vector_index
 from app.config import get_settings
 
 
+SAMPLE_COMPANIES = [
+    {
+        "co_code": "DEMO01",
+        "company_name": "範例科技股份有限公司",
+        "industry": "企業軟體",
+    },
+    {
+        "co_code": "DEMO02",
+        "company_name": "示範製造股份有限公司",
+        "industry": "智慧製造",
+    },
+]
+
+
 SAMPLE_DOCUMENTS = [
     {
         "source_id": "demo01-2026q2-call",
@@ -107,6 +121,19 @@ def create_indexes(driver, dimensions: int, database: str, vector_index: str, fu
         node_properties=["text", "title"],
         fail_if_exists=False,
         neo4j_database=database,
+    )
+
+
+def upsert_companies(driver, companies: list[dict], database: str) -> None:
+    driver.execute_query(
+        """
+        UNWIND $companies AS item
+        MERGE (company:Company {co_code: item.co_code})
+          SET company.name = item.company_name,
+              company.industry = item.industry
+        """,
+        companies=companies,
+        database_=database,
     )
 
 
@@ -240,6 +267,7 @@ def main() -> None:
             settings.neo4j_vector_index,
             settings.neo4j_fulltext_index,
         )
+        upsert_companies(driver, SAMPLE_COMPANIES, settings.neo4j_database)
         upsert_documents(driver, SAMPLE_DOCUMENTS, vectors, settings.neo4j_database)
         upsert_graph_relations(driver, settings.neo4j_database)
     finally:
