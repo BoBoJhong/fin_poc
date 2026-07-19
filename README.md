@@ -120,6 +120,17 @@ npm run build
 `--data-mode local` 會直接使用本機 SQLite、Neo4j 與設定的 Ollama Embedding
 執行同一份 Golden Set，可用來確認正式 repository 的檢索、公司隔離、引用與拒答流程。
 
+大量合成資料的可重複壓測：
+
+```bash
+cd backend
+../.venv/bin/python -m scripts.seed_scale --companies 60
+../.venv/bin/python -m scripts.evaluate_scale --companies 60 --end-to-end 20
+```
+
+壓測資料使用 `TST0001` 形式的代碼與 `scale-v1` 版本標記，僅供容量、隔離與
+檢索評估，不可視為真實公司資料。
+
 ### 可靠度門檻
 
 正式模式會先以 `co_code` 限縮向量候選，再用全文檢索訊號重新排序；全文結果
