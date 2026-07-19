@@ -103,6 +103,11 @@ def create_indexes(driver, dimensions: int, database: str, vector_index: str, fu
         "FOR (n:Chunk) REQUIRE n.chunk_id IS UNIQUE",
         database_=database,
     )
+    driver.execute_query(
+        "CREATE INDEX chunk_company_scope IF NOT EXISTS "
+        "FOR (n:Chunk) ON (n.co_code)",
+        database_=database,
+    )
     create_vector_index(
         driver,
         vector_index,
