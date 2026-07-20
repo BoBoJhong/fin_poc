@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import asyncio
+import time
+
 from fastmcp import FastMCP
 
-from app.company_resolver import find_company_mentions
+from app.company_resolver import find_company_mentions, search_company_candidates as rank_companies
 from app.config import get_settings
+from app.mcp_auth import build_mcp_auth
 from app.repositories import build_finance_repository, dump_evidence
 from app.validation import EvidenceValidator
 
@@ -11,16 +15,33 @@ from app.validation import EvidenceValidator
 settings = get_settings()
 validator = EvidenceValidator.from_settings(settings)
 repository = build_finance_repository(settings)
+_company_cache: list | None = None
+_company_cache_expires_at = 0.0
+_company_cache_lock = asyncio.Lock()
 mcp = FastMCP(
     "Finance Data MCP",
     instructions="Read-only, parameterized financial metric tools. Arbitrary SQL is forbidden.",
+    auth=build_mcp_auth(settings),
 )
+
+
+async def company_master() -> list:
+    global _company_cache, _company_cache_expires_at
+    now = time.monotonic()
+    if _company_cache is not None and now < _company_cache_expires_at:
+        return _company_cache
+    async with _company_cache_lock:
+        now = time.monotonic()
+        if _company_cache is None or now >= _company_cache_expires_at:
+            _company_cache = await repository.list_companies()
+            _company_cache_expires_at = now + settings.company_index_ttl_seconds
+    return _company_cache
 
 
 @mcp.tool
 async def resolve_company(name_or_code: str) -> dict:
     """Resolve names, aliases, and co_codes against the configured company master."""
-    items = await repository.list_companies()
+    items = await company_master()
     allowed = [item for item in items if settings.is_company_allowed(item.co_code)]
     matches = find_company_mentions(name_or_code, allowed)
     return {
@@ -33,9 +54,24 @@ async def resolve_company(name_or_code: str) -> dict:
 
 
 @mcp.tool
+async def search_company_candidates(name_or_code: str, limit: int = 10) -> dict:
+    """Return a bounded, scored candidate set from the configured company master."""
+    items = await company_master()
+    allowed = [item for item in items if settings.is_company_allowed(item.co_code)]
+    candidates = rank_companies(name_or_code, allowed, limit)
+    return {
+        "candidates": [item.model_dump(mode="json") for item in candidates],
+        "metadata": {
+            "tool": "search_company_candidates",
+            "candidate_count": len(candidates),
+        },
+    }
+
+
+@mcp.tool
 async def list_companies() -> dict:
     """List companies in the configured scope; '*' exposes the whole company master."""
-    items = await repository.list_companies()
+    items = await company_master()
     allowed = [item for item in items if settings.is_company_allowed(item.co_code)]
     return {
         "companies": [item.model_dump(mode="json") for item in allowed],
@@ -94,10 +130,31 @@ async def get_financial_source_preview(source_id: str, co_code: str) -> dict:
     }
 
 
+@mcp.tool
+async def list_financial_periods(co_code: str) -> dict:
+    """List available structured financial periods for one company."""
+    code = validator.validate_scope(co_code)
+    return {
+        "periods": await repository.list_periods(code),
+        "metadata": {"tool": "list_financial_periods", "co_code": code},
+    }
+
+
+@mcp.tool
+async def get_fiscal_calendar(co_code: str) -> dict:
+    """Return the company fiscal-calendar metadata when configured."""
+    code = validator.validate_scope(co_code)
+    calendar = await repository.get_fiscal_calendar(code)
+    return {
+        "fiscal_calendar": calendar.model_dump(mode="json") if calendar else None,
+        "metadata": {"tool": "get_fiscal_calendar", "co_code": code},
+    }
+
+
 if __name__ == "__main__":
     mcp.run(
         transport="http",
-        host=settings.mcp_server_host,
+        host=settings.mcp_bind_host,
         port=settings.finance_mcp_port,
         show_banner=False,
     )

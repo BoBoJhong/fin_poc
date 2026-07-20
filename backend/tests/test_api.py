@@ -26,6 +26,10 @@ def test_chat_and_source_preview_api() -> None:
     app.dependency_overrides[get_agent_service] = mock_service
     try:
         with TestClient(app) as client:
+            readiness = client.get("/health/readiness")
+            assert readiness.status_code == 200
+            assert readiness.json()["schema_version"] == "1.1"
+            assert readiness.json()["evidence_tools_ready"] is True
             companies = client.get("/api/v1/companies")
             assert companies.status_code == 200
             assert companies.json()[0]["co_code"] == "DEMO01"

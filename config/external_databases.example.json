@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "databases": [
+    {
+      "id": "temporary_finance_db",
+      "enabled": true,
+      "url_env": "TEMP_FINANCE_DATABASE_URL",
+      "connect_args": {},
+      "pool_size": 5,
+      "max_overflow": 10,
+      "pool_timeout_seconds": 10.0,
+      "datasets": [
+        {
+          "id": "quarterly_metrics",
+          "table": "quarterly_facts",
+          "schema_name": null,
+          "approved": false,
+          "mapping": {
+            "company_code": "ticker",
+            "company_name": "issuer_name",
+            "industry": "sector",
+            "period": "fiscal_period",
+            "metric": "metric_name",
+            "value": "metric_value",
+            "unit": "currency",
+            "scope": "statement_scope",
+            "source_id": "filing_id",
+            "source_url": "filing_url",
+            "data_version": "revision",
+            "updated_at": "loaded_at",
+            "primary_key": ["ticker", "fiscal_period", "metric_name"]
+          },
+          "default_unit": "UNKNOWN",
+          "default_scope": "external_database",
+          "row_limit": 1000
+        }
+      ]
+    }
+  ]
+}

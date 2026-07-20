@@ -63,3 +63,26 @@ async def test_empty_company_data_does_not_hallucinate() -> None:
     assert "找不到" in result.answer
     assert result.verification["passed"] is False
     assert result.verification["reliability_policy"]["accepted"] is False
+
+
+@pytest.mark.asyncio
+async def test_latest_period_is_resolved_from_available_company_data() -> None:
+    result = await service().answer("範例科技最近一季的營收是多少？")
+    assert result.period_resolution.resolved_period == "2026Q2"
+    assert result.period_resolution.method == "latest_verified_available"
+    assert result.verification["passed"] is True
+
+
+@pytest.mark.asyncio
+async def test_unavailable_previous_period_is_refused() -> None:
+    result = await service().answer("範例科技上一季的營收是多少？")
+    assert result.period_resolution.resolved_period is None
+    assert result.citations == []
+    assert result.verification["passed"] is False
+
+
+def test_english_finance_and_risk_terms_route_to_both_sources() -> None:
+    routes = CompanyLLMClient._heuristic_routes(
+        "What were Apple 2026 Q1 revenue and gross margin, and its cybersecurity risks?"
+    )
+    assert set(routes) == {"finance", "knowledge"}

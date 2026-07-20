@@ -9,7 +9,7 @@ from neo4j import GraphDatabase
 
 from app.config import get_settings
 from scripts.init_data import create_indexes, embed, sha256
-from scripts.init_sqlite import SCHEMA
+from scripts.init_sqlite import SCHEMA, migrate_schema
 
 
 DATA_VERSION = "scale-v1"
@@ -42,6 +42,7 @@ def seed_sqlite(rows: list[dict]) -> None:
     now = datetime.now(UTC).isoformat()
     with sqlite3.connect(path) as connection:
         connection.executescript(SCHEMA)
+        migrate_schema(connection)
         connection.executemany(
             """
             INSERT OR REPLACE INTO companies

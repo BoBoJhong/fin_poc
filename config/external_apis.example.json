@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "apis": [
+    {
+      "id": "vendor_finance_api",
+      "enabled": true,
+      "approved": false,
+      "base_url": "https://finance-api.example.com/v1",
+      "api_key_env": "VENDOR_FINANCE_API_KEY",
+      "auth_header": "Authorization",
+      "auth_scheme": "Bearer",
+      "timeout_seconds": 15.0,
+      "max_connections": 20,
+      "verify_tls": true,
+      "max_response_bytes": 5000000,
+      "companies": {
+        "path": "/companies",
+        "items_path": "data.items",
+        "query_params": {},
+        "row_limit": 10000
+      },
+      "company_mapping": {
+        "company_code": "ticker",
+        "company_name": "name",
+        "industry": "sector",
+        "aliases": "aliases",
+        "fiscal_year_end_month": "fiscal_year_end_month",
+        "timezone": "timezone"
+      },
+      "metrics": {
+        "path": "/financial-statements",
+        "items_path": "data.items",
+        "query_params": {
+          "ticker": "co_code",
+          "fiscal_period": "period"
+        },
+        "row_limit": 1000
+      },
+      "metric_mapping": null,
+      "dynamic_metric_mapping": {
+        "company_code": "ticker",
+        "period": "fiscal_period",
+        "metrics_path": "statements",
+        "fiscal_year": "fiscal_year",
+        "fiscal_quarter": "fiscal_quarter",
+        "period_start": "period_start",
+        "period_end": "period_end",
+        "consolidation_scope": "scope",
+        "source_id": "source.id",
+        "source_url": "source.url",
+        "data_version": "revision",
+        "updated_at": "updated_at"
+      },
+      "metric_definitions": [
+        {
+          "metric_code": "revenue",
+          "display_name": "營業收入",
+          "statement_type": "income_statement",
+          "data_type": "monetary",
+          "default_unit": "TWD",
+          "duration_type": "quarter",
+          "aliases": ["營收", "營業收入", "revenue"],
+          "approved": true
+        },
+        {
+          "metric_code": "basic_eps",
+          "display_name": "基本每股盈餘",
+          "statement_type": "income_statement",
+          "data_type": "per_share",
+          "default_unit": "TWD_PER_SHARE",
+          "duration_type": "quarter",
+          "aliases": ["EPS", "每股盈餘", "基本每股盈餘"],
+          "approved": true
+        }
+      ],
+      "provider_metric_mappings": [
+        {
+          "provider_id": "vendor_finance_api",
+          "provider_metric_key": "income_statement.營業收入合計",
+          "metric_code": "revenue",
+          "unit_override": null,
+          "scale": "1",
+          "statement_type_override": null,
+          "duration_type_override": null,
+          "approved": true
+        },
+        {
+          "provider_id": "vendor_finance_api",
+          "provider_metric_key": "income_statement.基本每股盈餘",
+          "metric_code": "basic_eps",
+          "unit_override": null,
+          "scale": "1",
+          "statement_type_override": null,
+          "duration_type_override": null,
+          "approved": true
+        }
+      ],
+      "default_unit": "UNKNOWN",
+      "default_scope": "external_api"
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import asyncio
 from types import SimpleNamespace
 
 import pytest
@@ -45,6 +46,7 @@ async def test_graph_query_scopes_every_node_and_relationship() -> None:
     await repository.search_graph("產品風險", "DEMO01", max_hops=2)
 
     assert "ALL(n IN nodes(path) WHERE n.co_code = $co_code)" in repository.driver.cypher
+    assert "NOT (anchor:Risk AND node:Risk AND node <> anchor)" in repository.driver.cypher
     assert "r.co_code = $co_code" in repository.driver.cypher
     assert "r.data_version IS NOT NULL" in repository.driver.cypher
 
@@ -53,7 +55,13 @@ async def test_graph_query_scopes_every_node_and_relationship() -> None:
 async def test_document_search_uses_scoped_vector_candidates_and_fulltext_boost() -> None:
     class Retriever:
         def search(self, **kwargs: object) -> SimpleNamespace:
-            assert kwargs["filters"] == {"co_code": {"$eq": "DEMO01"}}
+            assert kwargs["filters"]["co_code"] == {"$eq": "DEMO01"}
+            assert kwargs["filters"]["source_type"]["$eq"] in {
+                "financial_report",
+                "transcript",
+                "url",
+            }
+            assert kwargs["query_vector"] == [0.1, 0.2]
             return SimpleNamespace(
                 items=[
                     SimpleNamespace(
@@ -82,6 +90,8 @@ async def test_document_search_uses_scoped_vector_candidates_and_fulltext_boost(
 
     repository = object.__new__(Neo4jKnowledgeRepository)
     repository.vector_retriever = Retriever()
+    repository.embedder = SimpleNamespace(embed_query=lambda _: [0.1, 0.2])
+    repository.embedding_semaphore = asyncio.Semaphore(1)
     repository.driver = Driver()
     repository.settings = SimpleNamespace(
         hybrid_vector_weight=0.75,

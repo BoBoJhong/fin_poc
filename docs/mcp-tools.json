@@ -1,0 +1,2087 @@
+{
+  "schema_version": "1.1",
+  "servers": [
+    {
+      "name": "verified_financial_rag",
+      "url": "http://127.0.0.1:8003/mcp",
+      "tools": [
+        {
+          "name": "ask_financial_rag",
+          "description": "Answer one-company financial questions with verified, traceable RAG evidence.\n\nPut the company name or ticker and period in `query`. `co_code` is an optional\nbackwards-compatible hint, not a replacement for an explicit company in the query.\nA `refused` status means the caller must not invent or supplement an answer.",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "co_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "outputSchema": {
+            "properties": {
+              "schema_version": {
+                "const": "1.1",
+                "title": "Schema Version",
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "answered",
+                  "refused",
+                  "needs_clarification"
+                ],
+                "title": "Status",
+                "type": "string"
+              },
+              "answer": {
+                "title": "Answer",
+                "type": "string"
+              },
+              "co_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Co Code"
+              },
+              "display": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "period": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Period"
+                      },
+                      "speakers": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "title": "Speakers",
+                        "type": "array"
+                      },
+                      "content": {
+                        "title": "Content",
+                        "type": "string"
+                      },
+                      "sources": {
+                        "items": {
+                          "properties": {
+                            "citation_index": {
+                              "title": "Citation Index",
+                              "type": "integer"
+                            },
+                            "speaker": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null,
+                              "title": "Speaker"
+                            },
+                            "section": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null,
+                              "title": "Section"
+                            },
+                            "source_content": {
+                              "title": "Source Content",
+                              "type": "string"
+                            },
+                            "source_url": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null,
+                              "title": "Source Url"
+                            },
+                            "locator": {
+                              "properties": {
+                                "page": {
+                                  "anyOf": [
+                                    {
+                                      "type": "integer"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null,
+                                  "title": "Page"
+                                },
+                                "paragraph_id": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null,
+                                  "title": "Paragraph Id"
+                                },
+                                "timestamp": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null,
+                                  "title": "Timestamp"
+                                },
+                                "table": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null,
+                                  "title": "Table"
+                                },
+                                "primary_key": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null,
+                                  "title": "Primary Key"
+                                },
+                                "columns": {
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "title": "Columns",
+                                  "type": "array"
+                                },
+                                "graph_path": {
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "title": "Graph Path",
+                                  "type": "array"
+                                }
+                              },
+                              "title": "SourceLocator",
+                              "type": "object"
+                            },
+                            "content_hash": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null,
+                              "title": "Content Hash"
+                            }
+                          },
+                          "required": [
+                            "citation_index",
+                            "source_content",
+                            "locator"
+                          ],
+                          "title": "TranscriptDisplaySource",
+                          "type": "object"
+                        },
+                        "title": "Sources",
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "title",
+                      "content"
+                    ],
+                    "title": "TranscriptDisplay",
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "citations": {
+                "items": {
+                  "properties": {
+                    "index": {
+                      "title": "Index",
+                      "type": "integer"
+                    },
+                    "evidence_id": {
+                      "title": "Evidence Id",
+                      "type": "string"
+                    },
+                    "co_code": {
+                      "title": "Co Code",
+                      "type": "string"
+                    },
+                    "source_id": {
+                      "title": "Source Id",
+                      "type": "string"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "source_type": {
+                      "title": "Source Type",
+                      "type": "string"
+                    },
+                    "locator": {
+                      "properties": {
+                        "page": {
+                          "anyOf": [
+                            {
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null,
+                          "title": "Page"
+                        },
+                        "paragraph_id": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null,
+                          "title": "Paragraph Id"
+                        },
+                        "timestamp": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null,
+                          "title": "Timestamp"
+                        },
+                        "table": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null,
+                          "title": "Table"
+                        },
+                        "primary_key": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null,
+                          "title": "Primary Key"
+                        },
+                        "columns": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "title": "Columns",
+                          "type": "array"
+                        },
+                        "graph_path": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "title": "Graph Path",
+                          "type": "array"
+                        }
+                      },
+                      "title": "SourceLocator",
+                      "type": "object"
+                    },
+                    "quoted_text": {
+                      "title": "Quoted Text",
+                      "type": "string"
+                    },
+                    "period": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Period"
+                    },
+                    "metadata": {
+                      "additionalProperties": true,
+                      "title": "Metadata",
+                      "type": "object"
+                    },
+                    "live_url": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Live Url"
+                    },
+                    "content_hash": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Content Hash"
+                    },
+                    "captured_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Captured At"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "evidence_id",
+                    "co_code",
+                    "source_id",
+                    "title",
+                    "source_type",
+                    "locator",
+                    "quoted_text"
+                  ],
+                  "title": "VerifiedCitation",
+                  "type": "object"
+                },
+                "title": "Citations",
+                "type": "array"
+              },
+              "routes": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Routes",
+                "type": "array"
+              },
+              "trace_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Trace Id"
+              },
+              "verification": {
+                "additionalProperties": true,
+                "title": "Verification",
+                "type": "object"
+              },
+              "verified": {
+                "title": "Verified",
+                "type": "boolean"
+              },
+              "confidence": {
+                "maximum": 1,
+                "minimum": 0,
+                "title": "Confidence",
+                "type": "number"
+              },
+              "verification_notes": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Verification Notes",
+                "type": "array"
+              },
+              "warnings": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Warnings",
+                "type": "array"
+              },
+              "data_versions": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Data Versions",
+                "type": "array"
+              },
+              "latency_ms": {
+                "minimum": 0,
+                "title": "Latency Ms",
+                "type": "number"
+              },
+              "clarification_question": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Clarification Question"
+              },
+              "period_resolution": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "input": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Input"
+                      },
+                      "resolved_period": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Resolved Period"
+                      },
+                      "period_type": {
+                        "default": "fiscal_quarter",
+                        "title": "Period Type",
+                        "type": "string"
+                      },
+                      "as_of": {
+                        "title": "As Of",
+                        "type": "string"
+                      },
+                      "method": {
+                        "title": "Method",
+                        "type": "string"
+                      },
+                      "confidence": {
+                        "maximum": 1,
+                        "minimum": 0,
+                        "title": "Confidence",
+                        "type": "number"
+                      },
+                      "available_periods": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "title": "Available Periods",
+                        "type": "array"
+                      },
+                      "fiscal_calendar": {
+                        "anyOf": [
+                          {
+                            "properties": {
+                              "co_code": {
+                                "title": "Co Code",
+                                "type": "string"
+                              },
+                              "fiscal_year_end_month": {
+                                "maximum": 12,
+                                "minimum": 1,
+                                "title": "Fiscal Year End Month",
+                                "type": "integer"
+                              },
+                              "timezone": {
+                                "default": "UTC",
+                                "title": "Timezone",
+                                "type": "string"
+                              },
+                              "source": {
+                                "default": "company_master",
+                                "title": "Source",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "co_code",
+                              "fiscal_year_end_month"
+                            ],
+                            "title": "FiscalCalendar",
+                            "type": "object"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      }
+                    },
+                    "required": [
+                      "as_of",
+                      "method",
+                      "confidence"
+                    ],
+                    "title": "PeriodResolution",
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "schema_version",
+              "status",
+              "answer",
+              "co_code",
+              "display",
+              "citations",
+              "routes",
+              "trace_id",
+              "verification",
+              "verified",
+              "confidence",
+              "verification_notes",
+              "warnings",
+              "data_versions",
+              "latency_ms",
+              "clarification_question",
+              "period_resolution"
+            ],
+            "title": "VerifiedRAGResponse",
+            "type": "object"
+          }
+        },
+        {
+          "name": "retrieve_financial_evidence",
+          "description": "Retrieve validated financial evidence without generating an answer.",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "co_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "outputSchema": {
+            "properties": {
+              "schema_version": {
+                "const": "1.1",
+                "title": "Schema Version",
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "retrieved",
+                  "refused",
+                  "needs_clarification"
+                ],
+                "title": "Status",
+                "type": "string"
+              },
+              "co_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Co Code"
+              },
+              "period": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Period"
+              },
+              "evidence": {
+                "items": {
+                  "properties": {
+                    "evidence_id": {
+                      "title": "Evidence Id",
+                      "type": "string"
+                    },
+                    "co_code": {
+                      "title": "Co Code",
+                      "type": "string"
+                    },
+                    "source_id": {
+                      "title": "Source Id",
+                      "type": "string"
+                    },
+                    "source_type": {
+                      "enum": [
+                        "financial_report",
+                        "transcript",
+                        "url",
+                        "database",
+                        "graph"
+                      ],
+                      "title": "SourceType",
+                      "type": "string"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "content": {
+                      "title": "Content",
+                      "type": "string"
+                    },
+                    "score": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "title": "Score",
+                      "type": "number"
+                    },
+                    "period": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Period"
+                    },
+                    "locator": {
+                      "properties": {
+                        "page": {
+                          "anyOf": [
+                            {
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null,
+                          "title": "Page"
+                        },
+                        "paragraph_id": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null,
+                          "title": "Paragraph Id"
+                        },
+                        "timestamp": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null,
+                          "title": "Timestamp"
+                        },
+                        "table": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null,
+                          "title": "Table"
+                        },
+                        "primary_key": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null,
+                          "title": "Primary Key"
+                        },
+                        "columns": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "title": "Columns",
+                          "type": "array"
+                        },
+                        "graph_path": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "title": "Graph Path",
+                          "type": "array"
+                        }
+                      },
+                      "title": "SourceLocator",
+                      "type": "object"
+                    },
+                    "captured_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Captured At"
+                    },
+                    "content_hash": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Content Hash"
+                    },
+                    "data_version": {
+                      "default": "demo-v1",
+                      "title": "Data Version",
+                      "type": "string"
+                    },
+                    "metadata": {
+                      "additionalProperties": true,
+                      "title": "Metadata",
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "evidence_id",
+                    "co_code",
+                    "source_id",
+                    "source_type",
+                    "title",
+                    "content",
+                    "score"
+                  ],
+                  "title": "Evidence",
+                  "type": "object"
+                },
+                "title": "Evidence",
+                "type": "array"
+              },
+              "verified": {
+                "title": "Verified",
+                "type": "boolean"
+              },
+              "verification": {
+                "additionalProperties": true,
+                "title": "Verification",
+                "type": "object"
+              },
+              "warnings": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Warnings",
+                "type": "array"
+              },
+              "latency_ms": {
+                "minimum": 0,
+                "title": "Latency Ms",
+                "type": "number"
+              },
+              "clarification_question": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Clarification Question"
+              },
+              "period_resolution": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "input": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Input"
+                      },
+                      "resolved_period": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Resolved Period"
+                      },
+                      "period_type": {
+                        "default": "fiscal_quarter",
+                        "title": "Period Type",
+                        "type": "string"
+                      },
+                      "as_of": {
+                        "title": "As Of",
+                        "type": "string"
+                      },
+                      "method": {
+                        "title": "Method",
+                        "type": "string"
+                      },
+                      "confidence": {
+                        "maximum": 1,
+                        "minimum": 0,
+                        "title": "Confidence",
+                        "type": "number"
+                      },
+                      "available_periods": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "title": "Available Periods",
+                        "type": "array"
+                      },
+                      "fiscal_calendar": {
+                        "anyOf": [
+                          {
+                            "properties": {
+                              "co_code": {
+                                "title": "Co Code",
+                                "type": "string"
+                              },
+                              "fiscal_year_end_month": {
+                                "maximum": 12,
+                                "minimum": 1,
+                                "title": "Fiscal Year End Month",
+                                "type": "integer"
+                              },
+                              "timezone": {
+                                "default": "UTC",
+                                "title": "Timezone",
+                                "type": "string"
+                              },
+                              "source": {
+                                "default": "company_master",
+                                "title": "Source",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "co_code",
+                              "fiscal_year_end_month"
+                            ],
+                            "title": "FiscalCalendar",
+                            "type": "object"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      }
+                    },
+                    "required": [
+                      "as_of",
+                      "method",
+                      "confidence"
+                    ],
+                    "title": "PeriodResolution",
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "schema_version",
+              "status",
+              "co_code",
+              "period",
+              "evidence",
+              "verified",
+              "verification",
+              "warnings",
+              "latency_ms",
+              "clarification_question",
+              "period_resolution"
+            ],
+            "title": "EvidenceToolResponse",
+            "type": "object"
+          }
+        }
+      ]
+    },
+    {
+      "name": "verified_earnings_call",
+      "url": "http://127.0.0.1:8004/mcp",
+      "tools": [
+        {
+          "name": "ask_earnings_call",
+          "description": "Answer one-company earnings-call questions using transcript evidence only.",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "co_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "outputSchema": {
+            "properties": {
+              "schema_version": {
+                "const": "1.1",
+                "title": "Schema Version",
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "answered",
+                  "refused",
+                  "needs_clarification"
+                ],
+                "title": "Status",
+                "type": "string"
+              },
+              "answer": {
+                "title": "Answer",
+                "type": "string"
+              },
+              "co_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Co Code"
+              },
+              "display": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "title": {
+                        "title": "Title",
+                        "type": "string"
+                      },
+                      "period": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Period"
+                      },
+                      "speakers": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "title": "Speakers",
+                        "type": "array"
+                      },
+                      "content": {
+                        "title": "Content",
+                        "type": "string"
+                      },
+                      "sources": {
+                        "items": {
+                          "properties": {
+                            "citation_index": {
+                              "title": "Citation Index",
+                              "type": "integer"
+                            },
+                            "speaker": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null,
+                              "title": "Speaker"
+                            },
+                            "section": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null,
+                              "title": "Section"
+                            },
+                            "source_content": {
+                              "title": "Source Content",
+                              "type": "string"
+                            },
+                            "source_url": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null,
+                              "title": "Source Url"
+                            },
+                            "locator": {
+                              "properties": {
+                                "page": {
+                                  "anyOf": [
+                                    {
+                                      "type": "integer"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null,
+                                  "title": "Page"
+                                },
+                                "paragraph_id": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null,
+                                  "title": "Paragraph Id"
+                                },
+                                "timestamp": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null,
+                                  "title": "Timestamp"
+                                },
+                                "table": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null,
+                                  "title": "Table"
+                                },
+                                "primary_key": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null,
+                                  "title": "Primary Key"
+                                },
+                                "columns": {
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "title": "Columns",
+                                  "type": "array"
+                                },
+                                "graph_path": {
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "title": "Graph Path",
+                                  "type": "array"
+                                }
+                              },
+                              "title": "SourceLocator",
+                              "type": "object"
+                            },
+                            "content_hash": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "default": null,
+                              "title": "Content Hash"
+                            }
+                          },
+                          "required": [
+                            "citation_index",
+                            "source_content",
+                            "locator"
+                          ],
+                          "title": "TranscriptDisplaySource",
+                          "type": "object"
+                        },
+                        "title": "Sources",
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "title",
+                      "content"
+                    ],
+                    "title": "TranscriptDisplay",
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "citations": {
+                "items": {
+                  "properties": {
+                    "index": {
+                      "title": "Index",
+                      "type": "integer"
+                    },
+                    "evidence_id": {
+                      "title": "Evidence Id",
+                      "type": "string"
+                    },
+                    "co_code": {
+                      "title": "Co Code",
+                      "type": "string"
+                    },
+                    "source_id": {
+                      "title": "Source Id",
+                      "type": "string"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "source_type": {
+                      "title": "Source Type",
+                      "type": "string"
+                    },
+                    "locator": {
+                      "properties": {
+                        "page": {
+                          "anyOf": [
+                            {
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null,
+                          "title": "Page"
+                        },
+                        "paragraph_id": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null,
+                          "title": "Paragraph Id"
+                        },
+                        "timestamp": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null,
+                          "title": "Timestamp"
+                        },
+                        "table": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null,
+                          "title": "Table"
+                        },
+                        "primary_key": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null,
+                          "title": "Primary Key"
+                        },
+                        "columns": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "title": "Columns",
+                          "type": "array"
+                        },
+                        "graph_path": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "title": "Graph Path",
+                          "type": "array"
+                        }
+                      },
+                      "title": "SourceLocator",
+                      "type": "object"
+                    },
+                    "quoted_text": {
+                      "title": "Quoted Text",
+                      "type": "string"
+                    },
+                    "period": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Period"
+                    },
+                    "metadata": {
+                      "additionalProperties": true,
+                      "title": "Metadata",
+                      "type": "object"
+                    },
+                    "live_url": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Live Url"
+                    },
+                    "content_hash": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Content Hash"
+                    },
+                    "captured_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Captured At"
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "evidence_id",
+                    "co_code",
+                    "source_id",
+                    "title",
+                    "source_type",
+                    "locator",
+                    "quoted_text"
+                  ],
+                  "title": "VerifiedCitation",
+                  "type": "object"
+                },
+                "title": "Citations",
+                "type": "array"
+              },
+              "routes": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Routes",
+                "type": "array"
+              },
+              "trace_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Trace Id"
+              },
+              "verification": {
+                "additionalProperties": true,
+                "title": "Verification",
+                "type": "object"
+              },
+              "verified": {
+                "title": "Verified",
+                "type": "boolean"
+              },
+              "confidence": {
+                "maximum": 1,
+                "minimum": 0,
+                "title": "Confidence",
+                "type": "number"
+              },
+              "verification_notes": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Verification Notes",
+                "type": "array"
+              },
+              "warnings": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Warnings",
+                "type": "array"
+              },
+              "data_versions": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Data Versions",
+                "type": "array"
+              },
+              "latency_ms": {
+                "minimum": 0,
+                "title": "Latency Ms",
+                "type": "number"
+              },
+              "clarification_question": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Clarification Question"
+              },
+              "period_resolution": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "input": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Input"
+                      },
+                      "resolved_period": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Resolved Period"
+                      },
+                      "period_type": {
+                        "default": "fiscal_quarter",
+                        "title": "Period Type",
+                        "type": "string"
+                      },
+                      "as_of": {
+                        "title": "As Of",
+                        "type": "string"
+                      },
+                      "method": {
+                        "title": "Method",
+                        "type": "string"
+                      },
+                      "confidence": {
+                        "maximum": 1,
+                        "minimum": 0,
+                        "title": "Confidence",
+                        "type": "number"
+                      },
+                      "available_periods": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "title": "Available Periods",
+                        "type": "array"
+                      },
+                      "fiscal_calendar": {
+                        "anyOf": [
+                          {
+                            "properties": {
+                              "co_code": {
+                                "title": "Co Code",
+                                "type": "string"
+                              },
+                              "fiscal_year_end_month": {
+                                "maximum": 12,
+                                "minimum": 1,
+                                "title": "Fiscal Year End Month",
+                                "type": "integer"
+                              },
+                              "timezone": {
+                                "default": "UTC",
+                                "title": "Timezone",
+                                "type": "string"
+                              },
+                              "source": {
+                                "default": "company_master",
+                                "title": "Source",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "co_code",
+                              "fiscal_year_end_month"
+                            ],
+                            "title": "FiscalCalendar",
+                            "type": "object"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      }
+                    },
+                    "required": [
+                      "as_of",
+                      "method",
+                      "confidence"
+                    ],
+                    "title": "PeriodResolution",
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "schema_version",
+              "status",
+              "answer",
+              "co_code",
+              "display",
+              "citations",
+              "routes",
+              "trace_id",
+              "verification",
+              "verified",
+              "confidence",
+              "verification_notes",
+              "warnings",
+              "data_versions",
+              "latency_ms",
+              "clarification_question",
+              "period_resolution"
+            ],
+            "title": "VerifiedRAGResponse",
+            "type": "object"
+          }
+        },
+        {
+          "name": "retrieve_earnings_call_evidence",
+          "description": "Retrieve validated transcript evidence without generating an answer.",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "co_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "outputSchema": {
+            "properties": {
+              "schema_version": {
+                "const": "1.1",
+                "title": "Schema Version",
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "retrieved",
+                  "refused",
+                  "needs_clarification"
+                ],
+                "title": "Status",
+                "type": "string"
+              },
+              "co_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Co Code"
+              },
+              "period": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Period"
+              },
+              "evidence": {
+                "items": {
+                  "properties": {
+                    "evidence_id": {
+                      "title": "Evidence Id",
+                      "type": "string"
+                    },
+                    "co_code": {
+                      "title": "Co Code",
+                      "type": "string"
+                    },
+                    "source_id": {
+                      "title": "Source Id",
+                      "type": "string"
+                    },
+                    "source_type": {
+                      "enum": [
+                        "financial_report",
+                        "transcript",
+                        "url",
+                        "database",
+                        "graph"
+                      ],
+                      "title": "SourceType",
+                      "type": "string"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "content": {
+                      "title": "Content",
+                      "type": "string"
+                    },
+                    "score": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "title": "Score",
+                      "type": "number"
+                    },
+                    "period": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Period"
+                    },
+                    "locator": {
+                      "properties": {
+                        "page": {
+                          "anyOf": [
+                            {
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null,
+                          "title": "Page"
+                        },
+                        "paragraph_id": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null,
+                          "title": "Paragraph Id"
+                        },
+                        "timestamp": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null,
+                          "title": "Timestamp"
+                        },
+                        "table": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null,
+                          "title": "Table"
+                        },
+                        "primary_key": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null,
+                          "title": "Primary Key"
+                        },
+                        "columns": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "title": "Columns",
+                          "type": "array"
+                        },
+                        "graph_path": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "title": "Graph Path",
+                          "type": "array"
+                        }
+                      },
+                      "title": "SourceLocator",
+                      "type": "object"
+                    },
+                    "captured_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Captured At"
+                    },
+                    "content_hash": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Content Hash"
+                    },
+                    "data_version": {
+                      "default": "demo-v1",
+                      "title": "Data Version",
+                      "type": "string"
+                    },
+                    "metadata": {
+                      "additionalProperties": true,
+                      "title": "Metadata",
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "evidence_id",
+                    "co_code",
+                    "source_id",
+                    "source_type",
+                    "title",
+                    "content",
+                    "score"
+                  ],
+                  "title": "Evidence",
+                  "type": "object"
+                },
+                "title": "Evidence",
+                "type": "array"
+              },
+              "verified": {
+                "title": "Verified",
+                "type": "boolean"
+              },
+              "verification": {
+                "additionalProperties": true,
+                "title": "Verification",
+                "type": "object"
+              },
+              "warnings": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Warnings",
+                "type": "array"
+              },
+              "latency_ms": {
+                "minimum": 0,
+                "title": "Latency Ms",
+                "type": "number"
+              },
+              "clarification_question": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Clarification Question"
+              },
+              "period_resolution": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "input": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Input"
+                      },
+                      "resolved_period": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Resolved Period"
+                      },
+                      "period_type": {
+                        "default": "fiscal_quarter",
+                        "title": "Period Type",
+                        "type": "string"
+                      },
+                      "as_of": {
+                        "title": "As Of",
+                        "type": "string"
+                      },
+                      "method": {
+                        "title": "Method",
+                        "type": "string"
+                      },
+                      "confidence": {
+                        "maximum": 1,
+                        "minimum": 0,
+                        "title": "Confidence",
+                        "type": "number"
+                      },
+                      "available_periods": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "title": "Available Periods",
+                        "type": "array"
+                      },
+                      "fiscal_calendar": {
+                        "anyOf": [
+                          {
+                            "properties": {
+                              "co_code": {
+                                "title": "Co Code",
+                                "type": "string"
+                              },
+                              "fiscal_year_end_month": {
+                                "maximum": 12,
+                                "minimum": 1,
+                                "title": "Fiscal Year End Month",
+                                "type": "integer"
+                              },
+                              "timezone": {
+                                "default": "UTC",
+                                "title": "Timezone",
+                                "type": "string"
+                              },
+                              "source": {
+                                "default": "company_master",
+                                "title": "Source",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "co_code",
+                              "fiscal_year_end_month"
+                            ],
+                            "title": "FiscalCalendar",
+                            "type": "object"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      }
+                    },
+                    "required": [
+                      "as_of",
+                      "method",
+                      "confidence"
+                    ],
+                    "title": "PeriodResolution",
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "schema_version",
+              "status",
+              "co_code",
+              "period",
+              "evidence",
+              "verified",
+              "verification",
+              "warnings",
+              "latency_ms",
+              "clarification_question",
+              "period_resolution"
+            ],
+            "title": "EvidenceToolResponse",
+            "type": "object"
+          }
+        }
+      ]
+    }
+  ]
+}

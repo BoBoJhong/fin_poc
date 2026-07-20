@@ -4,9 +4,16 @@ import asyncio
 import json
 from typing import Any
 
-from app.company_resolver import find_company_mentions
+from app.company_resolver import find_company_mentions, search_company_candidates
 from app.config import Settings
-from app.models import CompanySummary, Evidence, SourcePreview, ToolEnvelope
+from app.models import (
+    CompanyCandidate,
+    CompanySummary,
+    Evidence,
+    FiscalCalendar,
+    SourcePreview,
+    ToolEnvelope,
+)
 from app.repositories import (
     FinanceRepository,
     KnowledgeRepository,
@@ -29,6 +36,7 @@ class MCPGateway:
         self.finance = finance_repository or build_finance_repository(settings)
         self._tools: dict[str, Any] | None = None
         self._tools_lock = asyncio.Lock()
+        self._company_index: list[CompanySummary] | None = None
 
     async def _get_tools(self) -> dict[str, Any]:
         if self._tools is not None:
@@ -89,7 +97,11 @@ class MCPGateway:
                 return cls._coerce_mapping(content)
             if isinstance(content, list):
                 for block in content:
-                    text = block.get("text") if isinstance(block, dict) else getattr(block, "text", None)
+                    text = (
+                        block.get("text")
+                        if isinstance(block, dict)
+                        else getattr(block, "text", None)
+                    )
                     if text:
                         return cls._coerce_mapping(text)
         artifact = getattr(raw, "artifact", None)
@@ -99,36 +111,87 @@ class MCPGateway:
         raise TypeError(f"Unsupported MCP result type: {type(raw)!r}")
 
     async def search_documents(
-        self, query: str, co_code: str, top_k: int = 5
+        self,
+        query: str,
+        co_code: str,
+        top_k: int = 5,
+        period: str | None = None,
+        source_types: tuple[str, ...] | None = None,
     ) -> list[Evidence]:
         if not self.settings.mcp_enabled:
-            return await self.knowledge.search_documents(query, co_code, top_k)
+            return await self.knowledge.search_documents(
+                query, co_code, top_k, period, source_types
+            )
         payload = await self._call(
             "search_financial_documents",
-            {"query": query, "co_code": co_code, "top_k": top_k},
+            {
+                "query": query,
+                "co_code": co_code,
+                "top_k": top_k,
+                "period": period,
+                "source_types": list(source_types) if source_types else None,
+            },
         )
         return ToolEnvelope.model_validate(payload).evidence
 
     async def search_graph(
-        self, query: str, co_code: str, max_hops: int = 2
+        self,
+        query: str,
+        co_code: str,
+        max_hops: int = 2,
+        period: str | None = None,
     ) -> list[Evidence]:
         if not self.settings.mcp_enabled:
-            return await self.knowledge.search_graph(query, co_code, max_hops)
+            return await self.knowledge.search_graph(query, co_code, max_hops, period)
         payload = await self._call(
             "search_graph_relationships",
-            {"query": query, "co_code": co_code, "max_hops": max_hops},
+            {
+                "query": query,
+                "co_code": co_code,
+                "max_hops": max_hops,
+                "period": period,
+            },
         )
         return ToolEnvelope.model_validate(payload).evidence
 
-    async def get_metrics(
-        self, co_code: str, period: str | None = None
-    ) -> list[Evidence]:
+    async def get_metrics(self, co_code: str, period: str | None = None) -> list[Evidence]:
         if not self.settings.mcp_enabled:
             return await self.finance.get_metrics(co_code, period)
-        payload = await self._call(
-            "get_financial_metrics", {"co_code": co_code, "period": period}
-        )
+        payload = await self._call("get_financial_metrics", {"co_code": co_code, "period": period})
         return ToolEnvelope.model_validate(payload).evidence
+
+    async def list_available_periods(
+        self, co_code: str, retrieval_profile: str = "unified"
+    ) -> list[str]:
+        periods: set[str] = set()
+        if retrieval_profile != "transcript":
+            if self.settings.mcp_enabled:
+                payload = await self._call("list_financial_periods", {"co_code": co_code})
+                periods.update(str(item) for item in payload.get("periods", []))
+            else:
+                periods.update(await self.finance.list_periods(co_code))
+        if retrieval_profile != "financial":
+            source_types = ["transcript"] if retrieval_profile == "transcript" else None
+            if self.settings.mcp_enabled:
+                payload = await self._call(
+                    "list_document_periods",
+                    {"co_code": co_code, "source_types": source_types},
+                )
+                periods.update(str(item) for item in payload.get("periods", []))
+            else:
+                periods.update(
+                    await self.knowledge.list_periods(
+                        co_code, tuple(source_types) if source_types else None
+                    )
+                )
+        return sorted(periods)
+
+    async def get_fiscal_calendar(self, co_code: str) -> FiscalCalendar | None:
+        if not self.settings.mcp_enabled:
+            return await self.finance.get_fiscal_calendar(co_code)
+        payload = await self._call("get_fiscal_calendar", {"co_code": co_code})
+        item = payload.get("fiscal_calendar")
+        return FiscalCalendar.model_validate(item) if item else None
 
     async def resolve_company(self, query: str) -> list[CompanySummary]:
         if not self.settings.mcp_enabled:
@@ -142,22 +205,33 @@ class MCPGateway:
             if self.settings.is_company_allowed(str(item.get("co_code", "")))
         ]
 
+    async def search_company_candidates(
+        self, query: str, limit: int = 10
+    ) -> list[CompanyCandidate]:
+        if not self.settings.mcp_enabled:
+            if self._company_index is None:
+                self._company_index = await self.finance.list_companies()
+            allowed = [
+                item
+                for item in self._company_index
+                if self.settings.is_company_allowed(item.co_code)
+            ]
+            return search_company_candidates(query, allowed, limit)
+        payload = await self._call(
+            "search_company_candidates",
+            {"name_or_code": query, "limit": limit},
+        )
+        return [CompanyCandidate.model_validate(item) for item in payload.get("candidates", [])]
+
     async def list_companies(self) -> list[CompanySummary]:
         if not self.settings.mcp_enabled:
             items = await self.finance.list_companies()
         else:
             payload = await self._call("list_companies", {})
-            items = [
-                CompanySummary.model_validate(item)
-                for item in payload.get("companies", [])
-            ]
-        return [
-            item for item in items if self.settings.is_company_allowed(item.co_code)
-        ]
+            items = [CompanySummary.model_validate(item) for item in payload.get("companies", [])]
+        return [item for item in items if self.settings.is_company_allowed(item.co_code)]
 
-    async def get_source_preview(
-        self, source_id: str, co_code: str
-    ) -> SourcePreview | None:
+    async def get_source_preview(self, source_id: str, co_code: str) -> SourcePreview | None:
         if not self.settings.mcp_enabled:
             preview = await self.knowledge.get_source_preview(source_id, co_code)
             return preview or await self.finance.get_source_preview(source_id, co_code)

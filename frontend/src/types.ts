@@ -24,19 +24,56 @@ export interface Citation {
   source_type: SourceType;
   locator: SourceLocator;
   quoted_text: string;
+  period?: string;
+  metadata?: {
+    speaker?: string;
+    section?: string;
+    event_date?: string;
+  };
+  live_url?: string;
+  content_hash?: string;
+  captured_at?: string;
+}
+
+export interface TranscriptDisplay {
+  title: string;
+  period?: string;
+  speakers: string[];
+  content: string;
+  sources: Array<{
+    citation_index: number;
+    speaker?: string;
+    section?: string;
+    source_content: string;
+    source_url?: string;
+    locator: SourceLocator;
+    content_hash?: string;
+  }>;
 }
 
 export interface ChatResult {
+  schema_version?: string;
+  status?: "answered" | "refused" | "needs_clarification";
   answer: string;
   co_code: string;
   citations: Citation[];
-  trace_id: string;
+  trace_id?: string;
   routes: string[];
   verification: {
     passed?: boolean;
     [key: string]: unknown;
   };
   data_versions: string[];
+  verified?: boolean;
+  confidence?: number;
+  warnings?: string[];
+  display?: TranscriptDisplay;
+  period_resolution?: {
+    input?: string;
+    resolved_period?: string;
+    method: string;
+    confidence: number;
+  };
 }
 
 export interface SourcePreview {

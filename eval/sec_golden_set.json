@@ -1,0 +1,56 @@
+[
+  {
+    "id": "aapl-real-finance-risk-en",
+    "query": "Apple 2026 Q1 revenue, gross margin, and cybersecurity risks?",
+    "co_code": "AAPL",
+    "expected_revenue": 111184000000,
+    "expected_gross_margin": 49.270579,
+    "expected_metric_source": "sec-aapl-2026q1-companyfacts",
+    "expected_document_source_prefix": "sec-aapl-000032019326000013"
+  },
+  {
+    "id": "msft-real-finance-risk-en",
+    "query": "Microsoft 2026 Q1 revenue and AI infrastructure capacity risks?",
+    "co_code": "MSFT",
+    "expected_revenue": 82886000000,
+    "expected_gross_margin": 67.632652,
+    "expected_metric_source": "sec-msft-2026q1-companyfacts",
+    "expected_document_source_prefix": "sec-msft-000119312526191507"
+  },
+  {
+    "id": "nvda-real-finance-risk-en",
+    "query": "NVIDIA 2026 Q1 revenue and export control risks?",
+    "co_code": "NVDA",
+    "expected_revenue": 81615000000,
+    "expected_gross_margin": 74.933529,
+    "expected_metric_source": "sec-nvda-2026q1-companyfacts",
+    "expected_document_source_prefix": "sec-nvda-000104581026000052"
+  },
+  {
+    "id": "aapl-real-cross-lingual",
+    "query": "蘋果公司 2026 Q1 的營收、毛利率與資安風險？",
+    "co_code": "AAPL",
+    "expected_revenue": 111184000000,
+    "expected_gross_margin": 49.270579,
+    "expected_metric_source": "sec-aapl-2026q1-companyfacts",
+    "expected_document_source_prefix": "sec-aapl-000032019326000013"
+  },
+  {
+    "id": "msft-real-cross-lingual",
+    "query": "微軟 2026 Q1 的營收與資料中心基礎設施風險？",
+    "co_code": "MSFT",
+    "expected_revenue": 82886000000,
+    "expected_gross_margin": 67.632652,
+    "expected_metric_source": "sec-msft-2026q1-companyfacts",
+    "expected_document_source_prefix": "sec-msft-000119312526191507"
+  },
+  {
+    "id": "nvda-real-cross-lingual",
+    "query": "輝達 2026 Q1 的營收與出口管制風險？",
+    "co_code": "NVDA",
+    "expected_revenue": 81615000000,
+    "expected_gross_margin": 74.933529,
+    "expected_metric_source": "sec-nvda-2026q1-companyfacts",
+    "expected_document_source_prefix": "sec-nvda-000104581026000052"
+  }
+]

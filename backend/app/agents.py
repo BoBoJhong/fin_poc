@@ -10,6 +10,7 @@ from app.company_resolver import CompanyResolutionError, resolve_company_scope
 from app.llm import CompanyLLMClient
 from app.mcp_gateway import MCPGateway
 from app.models import ChatResponse, Citation, Evidence
+from app.period_resolver import has_relative_period, resolve_period
 from app.validation import EvidenceValidator
 
 
@@ -19,6 +20,7 @@ class AgentState(TypedDict, total=False):
     trace_id: str
     routes: list[str]
     period: str | None
+    period_resolution: dict[str, Any]
     evidence: list[Evidence]
     answer: str
     verification: dict[str, Any]
@@ -35,11 +37,15 @@ class FinancialAgentService:
         llm: CompanyLLMClient,
         validator: EvidenceValidator,
         max_evidence_items: int = 8,
+        retrieval_profile: str = "unified",
     ):
         self.gateway = gateway
         self.llm = llm
         self.validator = validator
         self.max_evidence_items = max(1, min(max_evidence_items, 20))
+        if retrieval_profile not in {"unified", "financial", "transcript"}:
+            raise ValueError(f"Unsupported retrieval profile: {retrieval_profile}")
+        self.retrieval_profile = retrieval_profile
         self.graph = self._build_graph()
 
     def _build_graph(self):
@@ -68,15 +74,24 @@ class FinancialAgentService:
 
     async def _scope_node(self, state: AgentState) -> AgentState:
         requested_code = state.get("co_code")
-        selected_code = (
-            self.validator.validate_scope(requested_code) if requested_code else None
-        )
+        selected_code = self.validator.validate_scope(requested_code) if requested_code else None
         mentioned_companies = await self.gateway.resolve_company(state["query"])
         resolution_method = "company_master"
         resolution_status = "matched" if mentioned_companies else "not_mentioned"
         resolution_reason = "deterministic_name_alias_or_code_match"
         if not mentioned_companies:
-            companies = await self.gateway.list_companies()
+            candidates = await self.gateway.search_company_candidates(state["query"], limit=10)
+            if (
+                candidates
+                and candidates[0].score >= 0.92
+                and (len(candidates) == 1 or candidates[0].score - candidates[1].score >= 0.08)
+            ):
+                mentioned_companies = [candidates[0].company]
+                resolution_status = "matched"
+                resolution_reason = "high_confidence_fuzzy_company_index"
+                resolution_method = "company_entity_index"
+            companies = [candidate.company for candidate in candidates]
+        if not mentioned_companies:
             semantic_resolution = await self.llm.resolve_company_reference(
                 state["query"], companies
             )
@@ -92,11 +107,20 @@ class FinancialAgentService:
                 raise CompanyResolutionError("公司名稱不明確；請改用正式名稱或代碼")
         scoped = resolve_company_scope(selected_code, mentioned_companies)
         scoped = self.validator.validate_scope(scoped)
-        match = re.search(r"(20\d{2})\s*[-_/ ]?Q([1-4])", state["query"], re.IGNORECASE)
-        period = f"{match.group(1)}Q{match.group(2)}" if match else None
+        calendar = await self.gateway.get_fiscal_calendar(scoped)
+        available_periods = (
+            await self.gateway.list_available_periods(scoped, self.retrieval_profile)
+            if has_relative_period(state["query"])
+            else []
+        )
+        period_resolution = resolve_period(
+            state["query"], available_periods, fiscal_calendar=calendar
+        )
+        period = period_resolution.resolved_period
         return {
             "co_code": scoped,
             "period": period,
+            "period_resolution": period_resolution.model_dump(mode="json"),
             "evidence": [],
             "company_resolution": {
                 "passed": True,
@@ -106,29 +130,47 @@ class FinancialAgentService:
                 "co_code": scoped,
                 "selected_co_code": selected_code,
                 "selection_overridden": bool(selected_code and scoped != selected_code),
-                "mentioned_co_codes": [
-                    company.co_code for company in mentioned_companies
-                ],
+                "mentioned_co_codes": [company.co_code for company in mentioned_companies],
             },
         }
 
     async def _route_node(self, state: AgentState) -> AgentState:
+        if self.retrieval_profile == "transcript":
+            return {"routes": ["knowledge"]}
         routes = await self.llm.route(state["query"])
         return {"routes": routes}
 
     async def _knowledge_node(self, state: AgentState) -> AgentState:
         if "knowledge" not in state["routes"]:
             return {}
+        period_resolution = state.get("period_resolution", {})
+        if period_resolution.get("input") and not period_resolution.get("resolved_period"):
+            return {}
+        source_types = {
+            "financial": ("financial_report", "url"),
+            "transcript": ("transcript",),
+        }.get(self.retrieval_profile)
         documents = await self.gateway.search_documents(
-            state["query"], state["co_code"], top_k=5
+            state["query"],
+            state["co_code"],
+            top_k=5,
+            period=state.get("period"),
+            source_types=source_types,
         )
-        graph = await self.gateway.search_graph(
-            state["query"], state["co_code"], max_hops=2
+        graph = (
+            await self.gateway.search_graph(
+                state["query"], state["co_code"], max_hops=2, period=state.get("period")
+            )
+            if self.retrieval_profile == "unified"
+            else []
         )
         return {"evidence": [*state.get("evidence", []), *documents, *graph]}
 
     async def _data_node(self, state: AgentState) -> AgentState:
-        if "finance" not in state["routes"]:
+        if "finance" not in state["routes"] or self.retrieval_profile == "transcript":
+            return {}
+        period_resolution = state.get("period_resolution", {})
+        if period_resolution.get("input") and not period_resolution.get("resolved_period"):
             return {}
         items = await self.gateway.get_metrics(state["co_code"], state.get("period"))
         return {"evidence": [*state.get("evidence", []), *items]}
@@ -141,12 +183,78 @@ class FinancialAgentService:
                 unique[item.evidence_id] = item
         return {"evidence": list(unique.values())}
 
+    @staticmethod
+    def _metric_query_rank(item: Evidence, query: str) -> tuple[int, float]:
+        if item.source_type != "database":
+            return (0, item.score)
+        lowered = query.casefold()
+        terms = [
+            str(item.metadata.get("metric_code", "")).replace("_", " "),
+            str(item.metadata.get("metric_display_name", "")),
+            str(item.metadata.get("provider_metric_key", "")).split(".")[-1],
+            *(str(value) for value in item.metadata.get("metric_aliases", [])),
+        ]
+        matches = [term for term in terms if term and term.casefold() in lowered]
+        return (max((len(term) for term in matches), default=0), item.score)
+
+    def _select_diverse_evidence(self, items: list[Evidence], query: str) -> list[Evidence]:
+        """Prevent one retriever from crowding structured or document evidence out."""
+        ranked = sorted(
+            items,
+            key=lambda item: self._metric_query_rank(item, query),
+            reverse=True,
+        )
+        buckets: dict[str, list[Evidence]] = {
+            "database": [],
+            "financial_report": [],
+            "transcript": [],
+            "other_document": [],
+            "graph": [],
+        }
+        for item in ranked:
+            if item.source_type == "database":
+                buckets["database"].append(item)
+            elif item.source_type == "graph":
+                buckets["graph"].append(item)
+            elif item.source_type == "financial_report":
+                buckets["financial_report"].append(item)
+            elif item.source_type == "transcript":
+                buckets["transcript"].append(item)
+            else:
+                buckets["other_document"].append(item)
+
+        selected: list[Evidence] = []
+        # Reserve capacity for every available retrieval family, then fill by score.
+        reservations = {
+            "database": 3,
+            "financial_report": 2,
+            "transcript": 2,
+            "other_document": 0,
+            "graph": 1,
+        }
+        for family in (
+            "database",
+            "financial_report",
+            "transcript",
+            "other_document",
+            "graph",
+        ):
+            capacity = min(reservations[family], self.max_evidence_items - len(selected))
+            selected.extend(buckets[family][:capacity])
+            buckets[family] = buckets[family][capacity:]
+        remaining = sorted(
+            [item for bucket in buckets.values() for item in bucket],
+            key=lambda item: item.score,
+            reverse=True,
+        )
+        selected.extend(remaining[: self.max_evidence_items - len(selected)])
+        return selected
+
     async def _validate_node(self, state: AgentState) -> AgentState:
         valid = self.validator.validate_evidence(
             state["co_code"], state.get("evidence", []), state.get("period")
         )
-        valid.sort(key=lambda item: item.score, reverse=True)
-        valid = valid[: self.max_evidence_items]
+        valid = self._select_diverse_evidence(valid, state["query"])
         return {
             "evidence": valid,
             "verification": {
@@ -158,7 +266,7 @@ class FinancialAgentService:
                     "minimum_document_score": self.validator.document_min_relevance_score,
                     "minimum_graph_score": self.validator.graph_min_relevance_score,
                     "max_evidence_items": self.max_evidence_items,
-                }
+                },
             },
         }
 
@@ -251,19 +359,17 @@ class FinancialAgentService:
             verification = {**verification, "answer": answer_check}
 
         if not passed:
-            answer = "來源或答案驗證未通過，因此系統拒絕輸出可能誤導的答案。請查看 Trace ID 後重試。"
+            answer = (
+                "來源或答案驗證未通過，因此系統拒絕輸出可能誤導的答案。請查看 Trace ID 後重試。"
+            )
 
         policy = {
             "accepted": passed,
             "level": "high_guardrail_pass" if passed else "rejected",
             "gates": {
-                "company_resolved": bool(
-                    verification.get("company_resolution", {}).get("passed")
-                ),
+                "company_resolved": bool(verification.get("company_resolution", {}).get("passed")),
                 "evidence_available": bool(evidence),
-                "deterministic_answer_check": bool(
-                    verification.get("answer", {}).get("passed")
-                ),
+                "deterministic_answer_check": bool(verification.get("answer", {}).get("passed")),
                 "semantic_answer_check": bool(semantic.get("passed")),
             },
             "evidence_count": len(evidence),
@@ -295,9 +401,7 @@ class FinancialAgentService:
             }
         )
         evidence = final.get("evidence", [])
-        cited_indices = {
-            int(value) for value in re.findall(r"\[(\d+)]", final["answer"])
-        }
+        cited_indices = {int(value) for value in re.findall(r"\[(\d+)]", final["answer"])}
         cited_evidence = [
             item for index, item in enumerate(evidence, start=1) if index in cited_indices
         ]
@@ -311,6 +415,12 @@ class FinancialAgentService:
                 source_type=item.source_type,
                 locator=item.locator,
                 quoted_text=item.content,
+                period=item.period,
+                metadata={
+                    key: item.metadata[key]
+                    for key in ("speaker", "section", "event_date")
+                    if item.metadata.get(key) is not None
+                },
             )
             for index, item in enumerate(evidence, start=1)
             if index in cited_indices
@@ -323,4 +433,53 @@ class FinancialAgentService:
             routes=final.get("routes", []),
             verification=final.get("verification", {}),
             data_versions=sorted({item.data_version for item in cited_evidence}),
+            period_resolution=final.get("period_resolution"),
         )
+
+    async def retrieve_evidence(
+        self, query: str, co_code: str | None = None
+    ) -> dict[str, Any]:
+        """Retrieve and validate evidence without answer generation or semantic LLM calls."""
+        selected_code = self.validator.validate_scope(co_code) if co_code else None
+        mentioned = await self.gateway.resolve_company(query)
+        scoped = resolve_company_scope(selected_code, mentioned)
+        scoped = self.validator.validate_scope(scoped)
+        calendar = await self.gateway.get_fiscal_calendar(scoped)
+        available_periods = (
+            await self.gateway.list_available_periods(scoped, self.retrieval_profile)
+            if has_relative_period(query)
+            else []
+        )
+        period_resolution = resolve_period(query, available_periods, fiscal_calendar=calendar)
+        period = period_resolution.resolved_period
+        if self.retrieval_profile == "transcript":
+            routes = ["knowledge"]
+        elif self.retrieval_profile == "financial":
+            routes = ["knowledge", "finance"]
+        else:
+            routes = CompanyLLMClient._heuristic_routes(query)
+        state: AgentState = {
+            "query": query,
+            "co_code": scoped,
+            "period": period,
+            "period_resolution": period_resolution.model_dump(mode="json"),
+            "routes": routes,
+            "evidence": [],
+            "company_resolution": {
+                "passed": True,
+                "method": "company_master",
+                "co_code": scoped,
+            },
+        }
+        state.update(await self._knowledge_node(state))
+        state.update(await self._data_node(state))
+        state.update(await self._aggregate_node(state))
+        state.update(await self._validate_node(state))
+        return {
+            "co_code": scoped,
+            "period": period,
+            "routes": routes,
+            "evidence": state.get("evidence", []),
+            "verification": state.get("verification", {}),
+            "period_resolution": period_resolution.model_dump(mode="json"),
+        }

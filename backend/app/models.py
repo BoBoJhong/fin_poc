@@ -51,6 +51,8 @@ class Citation(BaseModel):
     source_type: SourceType
     locator: SourceLocator
     quoted_text: str
+    period: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class ChatRequest(BaseModel):
@@ -67,6 +69,31 @@ class CompanySummary(BaseModel):
     aliases: list[str] = Field(default_factory=list)
 
 
+class CompanyCandidate(BaseModel):
+    company: CompanySummary
+    score: float = Field(ge=0, le=1)
+    match_method: str
+    matched_term: str | None = None
+
+
+class FiscalCalendar(BaseModel):
+    co_code: str
+    fiscal_year_end_month: int = Field(ge=1, le=12)
+    timezone: str = "UTC"
+    source: str = "company_master"
+
+
+class PeriodResolution(BaseModel):
+    input: str | None = None
+    resolved_period: str | None = None
+    period_type: str = "fiscal_quarter"
+    as_of: str
+    method: str
+    confidence: float = Field(ge=0, le=1)
+    available_periods: list[str] = Field(default_factory=list)
+    fiscal_calendar: FiscalCalendar | None = None
+
+
 class ChatResponse(BaseModel):
     answer: str
     co_code: str
@@ -75,6 +102,7 @@ class ChatResponse(BaseModel):
     routes: list[str]
     verification: dict[str, Any]
     data_versions: list[str]
+    period_resolution: PeriodResolution | None = None
 
 
 class SourcePreview(BaseModel):

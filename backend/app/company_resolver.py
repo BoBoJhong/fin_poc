@@ -3,8 +3,9 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections.abc import Iterable
+from difflib import SequenceMatcher
 
-from app.models import CompanySummary
+from app.models import CompanyCandidate, CompanySummary
 
 
 class CompanyResolutionError(ValueError):
@@ -39,12 +40,76 @@ def derived_company_aliases(company: CompanySummary) -> set[str]:
 def find_company_mentions(query: str, companies: Iterable[CompanySummary]) -> list[CompanySummary]:
     """Return every company deterministically mentioned by name, alias, or co_code."""
     normalized_query = normalize_company_term(query)
-    matches = [
-        company
-        for company in companies
-        if any(alias in normalized_query for alias in derived_company_aliases(company))
-    ]
+    raw_query = unicodedata.normalize("NFKC", query).casefold()
+    matches = []
+    for company in companies:
+        mentioned = False
+        for alias in derived_company_aliases(company):
+            if alias.isascii() and len(alias) <= 5:
+                mentioned = bool(
+                    re.search(
+                        rf"(?<![0-9a-z]){re.escape(alias)}(?![0-9a-z])",
+                        raw_query,
+                    )
+                )
+            else:
+                mentioned = alias in normalized_query
+            if mentioned:
+                break
+        if mentioned:
+            matches.append(company)
     return sorted(matches, key=lambda company: company.co_code)
+
+
+def search_company_candidates(
+    query: str,
+    companies: Iterable[CompanySummary],
+    limit: int = 10,
+) -> list[CompanyCandidate]:
+    """Rank a bounded candidate set for fuzzy/LLM resolution without inventing codes."""
+    items = list(companies)
+    exact = find_company_mentions(query, items)
+    if exact:
+        return [
+            CompanyCandidate(
+                company=company,
+                score=1.0,
+                match_method="exact_company_index",
+                matched_term=company.co_code,
+            )
+            for company in exact[:limit]
+        ]
+
+    tokens = [
+        normalize_company_term(token)
+        for token in re.findall(r"[0-9A-Za-z.\-_]+|[\u3400-\u9fff]+", query)
+    ]
+    tokens = [token for token in tokens if len(token) >= 2]
+    normalized_query = normalize_company_term(query)
+    candidates: list[CompanyCandidate] = []
+    for company in items:
+        best_score = 0.0
+        best_term: str | None = None
+        for alias in derived_company_aliases(company):
+            comparisons = [normalized_query, *tokens]
+            score = max(
+                (SequenceMatcher(None, alias, candidate).ratio() for candidate in comparisons),
+                default=0.0,
+            )
+            if score > best_score:
+                best_score = score
+                best_term = alias
+        if best_score >= 0.55:
+            candidates.append(
+                CompanyCandidate(
+                    company=company,
+                    score=round(best_score, 6),
+                    match_method="fuzzy_company_index",
+                    matched_term=best_term,
+                )
+            )
+    candidates.sort(key=lambda item: (-item.score, item.company.co_code))
+    return candidates[: max(1, min(limit, 50))]
 
 
 def resolve_company_scope(

@@ -23,6 +23,7 @@ async def test_sqlite_repository_is_scoped_and_recheckable(tmp_path) -> None:
     preview = await repository.get_source_preview(
         "demo01-financial-metrics-2026q2", "DEMO01"
     )
+    fiscal_calendar = await repository.get_fiscal_calendar("DEMO01")
 
     assert {item.co_code for item in companies} == {"DEMO01", "DEMO02"}
     assert "範科" in next(item for item in companies if item.co_code == "DEMO01").aliases
@@ -31,3 +32,5 @@ async def test_sqlite_repository_is_scoped_and_recheckable(tmp_path) -> None:
     assert all(item.locator.primary_key for item in evidence)
     assert preview is not None
     assert preview.database_record["data_version"] == "demo-v1"
+    assert fiscal_calendar is not None
+    assert fiscal_calendar.fiscal_year_end_month == 12

@@ -1,0 +1,1063 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Verified Financial RAG MCP",
+    "description": "Source-isolated financial and earnings-call RAG with verified citations.",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/readiness": {
+      "get": {
+        "summary": "Readiness",
+        "operationId": "readiness_health_readiness_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Readiness Health Readiness Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/companies": {
+      "get": {
+        "summary": "Companies",
+        "description": "Return only locally available companies in the configured allowlist.",
+        "operationId": "companies_api_v1_companies_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CompanySummary"
+                  },
+                  "type": "array",
+                  "title": "Response Companies Api V1 Companies Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat": {
+      "post": {
+        "summary": "Chat",
+        "operationId": "chat_api_v1_chat_post",
+        "parameters": [
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "poc-user",
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "name": "X-Co-Code",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Co-Code"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifiedRAGResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat/stream": {
+      "post": {
+        "summary": "Chat Stream",
+        "operationId": "chat_stream_api_v1_chat_stream_post",
+        "parameters": [
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "poc-user",
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "name": "X-Co-Code",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Co-Code"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sources/{source_id}": {
+      "get": {
+        "summary": "Source Preview",
+        "operationId": "source_preview_api_v1_sources__source_id__get",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          },
+          {
+            "name": "co_code",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 32,
+              "title": "Co Code"
+            }
+          },
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "poc-user",
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "name": "X-Co-Code",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Co-Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourcePreview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ChatRequest": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 2,
+            "title": "Query"
+          },
+          "co_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Co Code"
+          },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "title": "ChatRequest"
+      },
+      "CompanySummary": {
+        "properties": {
+          "co_code": {
+            "type": "string",
+            "title": "Co Code"
+          },
+          "company_name": {
+            "type": "string",
+            "title": "Company Name"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          },
+          "aliases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Aliases"
+          }
+        },
+        "type": "object",
+        "required": [
+          "co_code",
+          "company_name"
+        ],
+        "title": "CompanySummary"
+      },
+      "FiscalCalendar": {
+        "properties": {
+          "co_code": {
+            "type": "string",
+            "title": "Co Code"
+          },
+          "fiscal_year_end_month": {
+            "type": "integer",
+            "maximum": 12.0,
+            "minimum": 1.0,
+            "title": "Fiscal Year End Month"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone",
+            "default": "UTC"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "company_master"
+          }
+        },
+        "type": "object",
+        "required": [
+          "co_code",
+          "fiscal_year_end_month"
+        ],
+        "title": "FiscalCalendar"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "PeriodResolution": {
+        "properties": {
+          "input": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input"
+          },
+          "resolved_period": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved Period"
+          },
+          "period_type": {
+            "type": "string",
+            "title": "Period Type",
+            "default": "fiscal_quarter"
+          },
+          "as_of": {
+            "type": "string",
+            "title": "As Of"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          },
+          "available_periods": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Available Periods"
+          },
+          "fiscal_calendar": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FiscalCalendar"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "as_of",
+          "method",
+          "confidence"
+        ],
+        "title": "PeriodResolution"
+      },
+      "SourceLocator": {
+        "properties": {
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
+          },
+          "paragraph_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paragraph Id"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp"
+          },
+          "table": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table"
+          },
+          "primary_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Key"
+          },
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Columns"
+          },
+          "graph_path": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Graph Path"
+          }
+        },
+        "type": "object",
+        "title": "SourceLocator"
+      },
+      "SourcePreview": {
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "title": "Source Id"
+          },
+          "co_code": {
+            "type": "string",
+            "title": "Co Code"
+          },
+          "source_type": {
+            "$ref": "#/components/schemas/SourceType"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "snapshot_html": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Html"
+          },
+          "live_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Url"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "locator": {
+            "$ref": "#/components/schemas/SourceLocator"
+          },
+          "captured_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Captured At"
+          },
+          "content_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Hash"
+          },
+          "database_record": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Database Record"
+          },
+          "graph": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Graph"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_id",
+          "co_code",
+          "source_type",
+          "title"
+        ],
+        "title": "SourcePreview"
+      },
+      "SourceType": {
+        "type": "string",
+        "enum": [
+          "financial_report",
+          "transcript",
+          "url",
+          "database",
+          "graph"
+        ],
+        "title": "SourceType"
+      },
+      "TranscriptDisplay": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period"
+          },
+          "speakers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Speakers"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/TranscriptDisplaySource"
+            },
+            "type": "array",
+            "title": "Sources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "content"
+        ],
+        "title": "TranscriptDisplay"
+      },
+      "TranscriptDisplaySource": {
+        "properties": {
+          "citation_index": {
+            "type": "integer",
+            "title": "Citation Index"
+          },
+          "speaker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speaker"
+          },
+          "section": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section"
+          },
+          "source_content": {
+            "type": "string",
+            "title": "Source Content"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "locator": {
+            "$ref": "#/components/schemas/SourceLocator"
+          },
+          "content_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Hash"
+          }
+        },
+        "type": "object",
+        "required": [
+          "citation_index",
+          "source_content",
+          "locator"
+        ],
+        "title": "TranscriptDisplaySource"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VerifiedCitation": {
+        "properties": {
+          "index": {
+            "type": "integer",
+            "title": "Index"
+          },
+          "evidence_id": {
+            "type": "string",
+            "title": "Evidence Id"
+          },
+          "co_code": {
+            "type": "string",
+            "title": "Co Code"
+          },
+          "source_id": {
+            "type": "string",
+            "title": "Source Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "source_type": {
+            "type": "string",
+            "title": "Source Type"
+          },
+          "locator": {
+            "$ref": "#/components/schemas/SourceLocator"
+          },
+          "quoted_text": {
+            "type": "string",
+            "title": "Quoted Text"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata"
+          },
+          "live_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Url"
+          },
+          "content_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Hash"
+          },
+          "captured_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Captured At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "index",
+          "evidence_id",
+          "co_code",
+          "source_id",
+          "title",
+          "source_type",
+          "locator",
+          "quoted_text"
+        ],
+        "title": "VerifiedCitation"
+      },
+      "VerifiedRAGResponse": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "1.1",
+            "title": "Schema Version"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "answered",
+              "refused",
+              "needs_clarification"
+            ],
+            "title": "Status"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "co_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Co Code"
+          },
+          "display": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TranscriptDisplay"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/VerifiedCitation"
+            },
+            "type": "array",
+            "title": "Citations"
+          },
+          "routes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Routes"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id"
+          },
+          "verification": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Verification"
+          },
+          "verified": {
+            "type": "boolean",
+            "title": "Verified"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          },
+          "verification_notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Verification Notes"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "data_versions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Data Versions"
+          },
+          "latency_ms": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Latency Ms"
+          },
+          "clarification_question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clarification Question"
+          },
+          "period_resolution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PeriodResolution"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "schema_version",
+          "status",
+          "answer",
+          "co_code",
+          "display",
+          "citations",
+          "routes",
+          "trace_id",
+          "verification",
+          "verified",
+          "confidence",
+          "verification_notes",
+          "warnings",
+          "data_versions",
+          "latency_ms",
+          "clarification_question",
+          "period_resolution"
+        ],
+        "title": "VerifiedRAGResponse"
+      }
+    }
+  }
+}

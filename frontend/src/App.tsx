@@ -9,7 +9,13 @@ import {
   type ReactNode,
 } from "react";
 import { fetchSource, streamChat } from "./api";
-import type { ChatResult, Citation, SourceLocator, SourcePreview } from "./types";
+import type {
+  ChatResult,
+  Citation,
+  SourceLocator,
+  SourcePreview,
+  TranscriptDisplay,
+} from "./types";
 
 interface Message {
   id: string;
@@ -21,6 +27,36 @@ interface Message {
 }
 
 const testCases = [
+  {
+    label: "Microsoft 法說 · Q3",
+    expected: "官方逐字稿：Prepared Remarks 與展望",
+    query: "微軟 2026 Q1 法說會中，Amy Hood 對下一季公司總營收的展望是多少？",
+    tone: "pass",
+  },
+  {
+    label: "Microsoft 法說 · Q2",
+    expected: "官方逐字稿：Q&A、發言人與季度隔離",
+    query: "What did Amy Hood say in Microsoft 2025 Q4 earnings call Q&A about connecting CapEx to Azure revenue?",
+    tone: "pass",
+  },
+  {
+    label: "Apple · SEC",
+    expected: "真實 10-Q：財務＋風險＋官方來源",
+    query: "蘋果 2026 Q1 的營收、毛利率與主要風險是什麼？",
+    tone: "pass",
+  },
+  {
+    label: "Microsoft · SEC",
+    expected: "真實 10-Q：跨語言檢索與引用",
+    query: "What were Microsoft 2026 Q1 revenue and gross margin, and its main risks?",
+    tone: "pass",
+  },
+  {
+    label: "NVIDIA · SEC",
+    expected: "真實 10-Q：公司隔離與來源回查",
+    query: "輝達 2026 Q1 的營收、毛利率與供應鏈風險？",
+    tone: "pass",
+  },
   {
     label: "綜合 RAG",
     expected: "財務＋文件＋Graph，應通過",
@@ -135,6 +171,53 @@ function CopyButton({ text }: { text: string }) {
     >
       {copied ? "✓ 已複製" : "複製"}
     </button>
+  );
+}
+
+function TranscriptDisplayCard({
+  display,
+  citations,
+  onCitation,
+  activeCitationId,
+}: {
+  display: TranscriptDisplay;
+  citations: Citation[];
+  onCitation: (citation: Citation) => void;
+  activeCitationId?: string;
+}) {
+  return (
+    <section className="transcript-display">
+      <h3>{display.title}</h3>
+      <div className="transcript-field">
+        <b>發表人：</b>
+        <span>{display.speakers.length ? display.speakers.join("、") : "未標示"}</span>
+      </div>
+      <div className="transcript-field transcript-content">
+        <b>內文：</b>
+        <AnswerText
+          text={display.content}
+          citations={citations}
+          onCitation={onCitation}
+          activeCitationId={activeCitationId}
+        />
+      </div>
+      <details className="transcript-sources">
+        <summary>來源內容（{display.sources.length}）</summary>
+        {display.sources.map((source) => {
+          const citation = citations.find((item) => item.index === source.citation_index);
+          return (
+            <button
+              type="button"
+              key={`${source.citation_index}-${source.locator.paragraph_id || "source"}`}
+              onClick={() => citation && void onCitation(citation)}
+            >
+              <span>{source.speaker || "未標示發表人"} · {source.section || "逐字稿"}</span>
+              <q>{source.source_content}</q>
+            </button>
+          );
+        })}
+      </details>
+    </section>
   );
 }
 
@@ -510,7 +593,7 @@ export default function App() {
           <p>GraphRAG × Controlled Agents × Verifiable Sources</p>
         </div>
         <div className="topbar-actions">
-          <span className="environment"><i />Local PoC</span>
+          <span className="environment"><i />Verified RAG</span>
           <span className="environment">全公司主檔</span>
         </div>
       </header>
@@ -525,9 +608,16 @@ export default function App() {
               <article className={`message ${message.role} ${message.error ? "error" : ""}`} key={message.id}>
                 {message.role === "assistant" && <div className="avatar">AI</div>}
                 <div className="message-body">
-                  {message.role === "assistant" && <span className="role-label">Financial Agent</span>}
+                  {message.role === "assistant" && <span className="role-label">Verified RAG</span>}
                   {message.status && !message.text && <div className="thinking"><span className="loader" />{message.status}</div>}
-                  {message.text && (
+                  {message.result?.display ? (
+                    <TranscriptDisplayCard
+                      display={message.result.display}
+                      citations={message.result.citations}
+                      onCitation={openCitation}
+                      activeCitationId={activeCitation?.evidence_id}
+                    />
+                  ) : message.text ? (
                     <AnswerText
                       text={message.text}
                       citations={message.result?.citations || []}
@@ -535,7 +625,7 @@ export default function App() {
                       activeCitationId={activeCitation?.evidence_id}
                       streaming={Boolean(message.status)}
                     />
-                  )}
+                  ) : null}
                   {message.result && (
                     <div className="answer-footer">
                       <div className="citation-list">
@@ -566,7 +656,7 @@ export default function App() {
             <details className="test-suite" open>
               <summary>
                 <span>快速測試案例</span>
-                <small>8 項 · 正常、拒答與防護</small>
+                <small>{testCases.length} 項 · 真實資料、拒答與防護</small>
               </summary>
               <div className="test-case-list">
                 {testCases.map((testCase) => (
@@ -607,7 +697,7 @@ export default function App() {
             </form>
             <div className="composer-note">
               <span>答案只使用授權 Evidence</span>
-              {latestResult && <span>Trace: {latestResult.trace_id.slice(0, 8)}</span>}
+              {latestResult?.trace_id && <span>Trace: {latestResult.trace_id.slice(0, 8)}</span>}
             </div>
           </div>
         </section>

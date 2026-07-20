@@ -6,6 +6,7 @@ from app.company_resolver import (
     CompanyResolutionError,
     find_company_mentions,
     resolve_company_scope,
+    search_company_candidates,
 )
 from app.config import Settings
 from app.llm import CompanyLLMClient
@@ -44,6 +45,16 @@ def test_explicit_company_overrides_default_and_ambiguous_matches_are_rejected()
 def test_company_is_required_when_there_is_no_legacy_default() -> None:
     with pytest.raises(CompanyResolutionError, match="無法從問題判斷公司"):
         resolve_company_scope(None, [])
+
+
+def test_company_index_ranks_typo_and_short_codes_require_boundaries() -> None:
+    candidates = search_company_candidates("範例科枝 2026 Q2 營收", COMPANIES)
+    assert candidates[0].company.co_code == "DEMO01"
+    assert candidates[0].match_method == "fuzzy_company_index"
+
+    short_code = CompanySummary(co_code="AI", company_name="Artificial Industries")
+    assert find_company_mentions("The company said revenue increased", [short_code]) == []
+    assert find_company_mentions("AI revenue", [short_code])[0].co_code == "AI"
 
 
 @pytest.mark.asyncio

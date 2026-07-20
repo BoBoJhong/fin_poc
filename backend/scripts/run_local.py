@@ -9,6 +9,10 @@ import sys
 import time
 from pathlib import Path
 
+from dotenv import dotenv_values
+
+from app.config import Settings
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_ROOT = PROJECT_ROOT / "backend"
@@ -34,20 +38,35 @@ def wait_for_port(port: int, processes: list[subprocess.Popen], timeout: float =
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the complete PoC without Docker.")
+    parser = argparse.ArgumentParser(description="Run the complete Verified RAG product stack.")
     parser.add_argument("--no-frontend", action="store_true")
     args = parser.parse_args()
 
     env = os.environ.copy()
+    file_env = {key: value for key, value in dotenv_values(PROJECT_ROOT / ".env").items() if value}
     env.setdefault("PYTHONUNBUFFERED", "1")
+    settings = Settings()
     python = sys.executable
     processes = [
         command("knowledge-mcp", [python, "-m", "mcp_servers.knowledge"], BACKEND_ROOT, env),
         command("finance-mcp", [python, "-m", "mcp_servers.finance"], BACKEND_ROOT, env),
     ]
     try:
-        wait_for_port(8001, processes)
-        wait_for_port(8002, processes)
+        wait_for_port(settings.knowledge_mcp_port, processes)
+        wait_for_port(settings.finance_mcp_port, processes)
+        processes.append(
+            command("verified-rag-mcp", [python, "-m", "mcp_servers.rag"], BACKEND_ROOT, env)
+        )
+        wait_for_port(settings.rag_mcp_port, processes)
+        processes.append(
+            command(
+                "verified-transcript-mcp",
+                [python, "-m", "mcp_servers.transcript"],
+                BACKEND_ROOT,
+                env,
+            )
+        )
+        wait_for_port(settings.transcript_mcp_port, processes)
         processes.append(
             command(
                 "api",
@@ -57,15 +76,17 @@ def main() -> None:
                     "uvicorn",
                     "app.main:app",
                     "--host",
-                    "127.0.0.1",
+                    settings.api_host,
                     "--port",
-                    "8000",
+                    str(settings.api_port),
+                    "--workers",
+                    env.get("API_WORKERS", file_env.get("API_WORKERS", "1")),
                 ],
                 BACKEND_ROOT,
                 env,
             )
         )
-        wait_for_port(8000, processes)
+        wait_for_port(settings.api_port, processes)
         if not args.no_frontend:
             processes.append(
                 command(
@@ -94,7 +115,11 @@ def main() -> None:
 
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
-    endpoints = "API: http://127.0.0.1:8000/docs"
+    endpoints = (
+        f"API: http://127.0.0.1:{settings.api_port}/docs  "
+        f"Financial MCP: http://127.0.0.1:{settings.rag_mcp_port}/mcp  "
+        f"Transcript MCP: http://127.0.0.1:{settings.transcript_mcp_port}/mcp"
+    )
     if not args.no_frontend:
         endpoints = "UI: http://127.0.0.1:5173  " + endpoints
     print(f"Local services started. {endpoints}")

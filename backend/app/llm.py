@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from typing import Any
@@ -15,6 +16,23 @@ class CompanyLLMClient:
 
     def __init__(self, settings: Settings):
         self.settings = settings
+        self._semaphore = asyncio.Semaphore(settings.company_llm_max_concurrency)
+        self._http_client: httpx.AsyncClient | None = None
+        self._client_lock = asyncio.Lock()
+
+    async def _client(self) -> httpx.AsyncClient:
+        if self._http_client is not None:
+            return self._http_client
+        async with self._client_lock:
+            if self._http_client is None:
+                self._http_client = httpx.AsyncClient(
+                    timeout=self.settings.company_llm_timeout_seconds,
+                    limits=httpx.Limits(
+                        max_connections=self.settings.company_llm_max_connections,
+                        max_keepalive_connections=self.settings.company_llm_max_connections,
+                    ),
+                )
+        return self._http_client
 
     async def resolve_company_reference(
         self, query: str, companies: list[CompanySummary]
@@ -90,20 +108,60 @@ class CompanyLLMClient:
             ]
         )
         parsed = self._parse_json(content)
-        routes = [
-            route
-            for route in parsed.get("routes", [])
-            if route in {"knowledge", "finance"}
-        ]
+        routes = [route for route in parsed.get("routes", []) if route in {"knowledge", "finance"}]
         return routes or ["knowledge"]
 
     @staticmethod
     def _heuristic_routes(query: str) -> list[str]:
         lowered = query.lower()
         routes: list[str] = []
-        data_terms = ["營收", "毛利", "eps", "數字", "多少", "比較", "成長率", "財務指標"]
-        graph_terms = ["關聯", "影響", "風險", "供應鏈", "產品", "客戶", "上下游"]
-        rag_terms = ["財報", "法說", "逐字稿", "說明", "原因", "展望", "風險"]
+        data_terms = [
+            "營收",
+            "毛利",
+            "eps",
+            "數字",
+            "多少",
+            "比較",
+            "成長率",
+            "財務指標",
+            "revenue",
+            "sales",
+            "gross profit",
+            "gross margin",
+            "financial metric",
+        ]
+        graph_terms = [
+            "關聯",
+            "影響",
+            "風險",
+            "供應鏈",
+            "產品",
+            "客戶",
+            "上下游",
+            "risk",
+            "supply chain",
+            "cybersecurity",
+            "export control",
+            "competition",
+            "infrastructure",
+        ]
+        rag_terms = [
+            "財報",
+            "法說",
+            "逐字稿",
+            "說明",
+            "原因",
+            "展望",
+            "風險",
+            "filing",
+            "10-q",
+            "risk",
+            "outlook",
+            "earnings call",
+            "conference call",
+            "transcript",
+            "prepared remarks",
+        ]
         if any(term in lowered for term in data_terms):
             routes.append("finance")
         if any(term in lowered for term in rag_terms) or not routes:
@@ -163,14 +221,21 @@ class CompanyLLMClient:
         graph_claims: list[str] = []
         for index, item in enumerate(evidence, start=1):
             citation = f"[{index}]"
+            # Retrieved SEC paragraphs contain layout newlines. Keep one evidence item as
+            # one claim segment so the citation remains adjacent to every emitted claim.
+            content = re.sub(r"\s+", " ", item.content).strip()
             if item.source_type == "database":
-                metric_claims.append(f"{item.content}{citation}")
+                metric_claims.append(f"{content}{citation}")
             elif item.source_type == "graph":
-                graph_claims.append(f"{item.content}{citation}")
+                graph_claims.append(f"{content}{citation}")
             else:
-                qualitative.append(f"{item.content}{citation}")
+                qualitative.append(f"{content}{citation}")
 
-        sections = [f"以下回答僅依據 {co_code} 的 PoC 授權資料（內建資料為虛構）："]
+        real_sources = any(item.data_version.startswith(("sec:", "ir:")) for item in evidence)
+        qualifier = (
+            "已匯入的 SEC 官方資料" if real_sources else "PoC 授權測試資料（內建資料為虛構）"
+        )
+        sections = [f"以下回答僅依據 {co_code} 的{qualifier}："]
         if metric_claims:
             sections.append("\n**財務數據**\n" + "\n".join(f"- {x}" for x in metric_claims))
         if qualitative:
@@ -226,9 +291,7 @@ class CompanyLLMClient:
         )
         parsed = self._parse_json(content)
         unsupported_claims = [
-            str(claim)
-            for claim in parsed.get("unsupported_claims", [])
-            if str(claim).strip()
+            str(claim) for claim in parsed.get("unsupported_claims", []) if str(claim).strip()
         ]
         return {
             "passed": bool(parsed.get("passed", False)) and not unsupported_claims,
@@ -249,11 +312,26 @@ class CompanyLLMClient:
             "messages": messages,
             "temperature": 0,
         }
-        async with httpx.AsyncClient(timeout=self.settings.company_llm_timeout_seconds) as client:
+        try:
+            await asyncio.wait_for(
+                self._semaphore.acquire(),
+                timeout=self.settings.company_llm_queue_timeout_seconds,
+            )
+        except TimeoutError as exc:
+            raise RuntimeError("Company LLM concurrency queue is full") from exc
+        try:
+            client = await self._client()
             response = await client.post(url, headers=headers, json=payload)
             response.raise_for_status()
             body = response.json()
+        finally:
+            self._semaphore.release()
         return str(body["choices"][0]["message"]["content"])
+
+    async def close(self) -> None:
+        if self._http_client is not None:
+            await self._http_client.aclose()
+            self._http_client = None
 
     @staticmethod
     def _parse_json(content: str) -> dict[str, Any]:

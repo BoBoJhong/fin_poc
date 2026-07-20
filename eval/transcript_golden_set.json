@@ -1,0 +1,62 @@
+[
+  {
+    "id": "msft-q3-capacity-en",
+    "query": "What did Satya Nadella say in Microsoft 2026 Q1 earnings call about datacenter capacity?",
+    "co_code": "MSFT",
+    "period": "2026Q1",
+    "source_id": "ir-msft-fy2026-q3-transcript",
+    "speaker": "SATYA NADELLA",
+    "section": "prepared_remarks",
+    "expected_terms": ["another gigawatt", "double our overall footprint"]
+  },
+  {
+    "id": "msft-q3-outlook-zh",
+    "query": "微軟 2026 Q1 法說會中，Amy Hood 對下一季公司總營收的展望是多少？",
+    "co_code": "MSFT",
+    "period": "2026Q1",
+    "source_id": "ir-msft-fy2026-q3-transcript",
+    "speaker": "AMY HOOD",
+    "section": "prepared_remarks",
+    "expected_terms": ["$86.7", "$87.8 billion"]
+  },
+  {
+    "id": "msft-q3-pricing-qa-zh",
+    "query": "微軟 2026 Q1 法說會問答中，Satya 如何說明客戶對 AI token 消耗的可預測性？",
+    "co_code": "MSFT",
+    "period": "2026Q1",
+    "source_id": "ir-msft-fy2026-q3-transcript",
+    "speaker": "SATYA NADELLA",
+    "section": "question_and_answer",
+    "expected_terms": ["customers want predictability", "seat-based pricing"]
+  },
+  {
+    "id": "msft-q2-capex-qa-en",
+    "query": "What did Amy Hood say in Microsoft 2025 Q4 earnings call Q&A about connecting CapEx to Azure revenue?",
+    "co_code": "MSFT",
+    "period": "2025Q4",
+    "source_id": "ir-msft-fy2026-q2-transcript",
+    "speaker": "AMY HOOD",
+    "section": "question_and_answer",
+    "expected_terms": ["CapEx spend", "Azure revenue"]
+  },
+  {
+    "id": "msft-q2-agent-platform-zh",
+    "query": "微軟 2025 Q4 法說會中，Satya 如何形容 AI agent 與應用程式的關係？",
+    "co_code": "MSFT",
+    "period": "2025Q4",
+    "source_id": "ir-msft-fy2026-q2-transcript",
+    "speaker": "SATYA NADELLA",
+    "section": "prepared_remarks",
+    "expected_terms": ["agents as the new Apps", "new app platform"]
+  },
+  {
+    "id": "msft-q2-capex-en",
+    "query": "According to Microsoft 2025 Q4 earnings call, what were capital expenditures and what did Amy Hood say about demand?",
+    "co_code": "MSFT",
+    "period": "2025Q4",
+    "source_id": "ir-msft-fy2026-q2-transcript",
+    "speaker": "AMY HOOD",
+    "section": "prepared_remarks",
+    "expected_terms": ["$37.5 billion", "demand continues to exceed our supply"]
+  }
+]

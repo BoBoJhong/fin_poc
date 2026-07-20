@@ -27,10 +27,15 @@ async def test_finance_mcp_returns_recheckable_record() -> None:
     async with Client(finance_mcp) as client:
         tools = await client.list_tools()
         assert "resolve_company" in {tool.name for tool in tools}
+        assert "search_company_candidates" in {tool.name for tool in tools}
         resolution = await client.call_tool(
             "resolve_company", {"name_or_code": "範科 2026 Q2 營收"}
         )
         assert resolution.data["companies"][0]["co_code"] == "DEMO01"
+        candidates = await client.call_tool(
+            "search_company_candidates", {"name_or_code": "範例科枝 營收", "limit": 5}
+        )
+        assert candidates.data["candidates"][0]["company"]["co_code"] == "DEMO01"
 
         result = await client.call_tool(
             "get_financial_metrics",

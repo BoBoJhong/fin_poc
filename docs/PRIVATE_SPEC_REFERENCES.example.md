@@ -7,6 +7,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | SPEC-LLM-001 | 公司 LLM API Contract | `<internal-reference-only>` | `<version>` | `<owner>` | `backend/app/llm.py` | 待確認 |
 | SPEC-DB-001 | SQLite Schema／MariaDB→SQLite Mapping | `<internal-reference-only>` | `<version>` | `<owner>` | `backend/app/repositories.py` | 待確認 |
+| SPEC-EXTAPI-001 | 外部財務 API Contract／欄位 Mapping | `<internal-reference-only>` | `<version>` | `<owner>` | `backend/app/external_api_connectors.py`、`config/external_apis.local.json` | 待確認 |
 | SPEC-COMPANY-001 | `co_code` Master／Alias／授權集合 | `<internal-reference-only>` | `<version>` | `<owner>` | `backend/app/main.py`、Company Resolver | 待確認 |
 | SPEC-GRAPH-001 | 最小 Graph Ontology／Provenance | `<internal-reference-only>` | `<version>` | `<owner>` | `backend/app/repositories.py`、`backend/scripts/init_data.py` | 待確認 |
 | SPEC-ACCEPT-001 | 真實 Golden Set／驗收規則 | `<internal-reference-only>` | `<version>` | `<owner>` | `eval/`、`backend/scripts/evaluate.py` | 待確認 |
