@@ -18,6 +18,9 @@ Financial／Earnings Call MCP；所有回答都必須通過公司、期間、來
 [專案規格](docs/PROJECT_SPEC.md)。提供 MCP 給同事或新增其他 MCP 時，使用
 [三份正式規格總覽](docs/README.md)。
 
+目前完成項目、真實驗證結果與正式上線缺口請見
+[專案完成狀態](PROJECT_COMPLETION_STATUS.md)。
+
 ## 快速開始
 
 需求：Python 3.11+、Node.js 20+。`DATA_MODE=local` 另需 Neo4j、Ollama 及資料庫。
