@@ -140,7 +140,47 @@ turn_id = <source_id>-turn-<source-turn-sequence:3>-part-<part-index:2>
 `effective_min = min(min_chars, max_chars // 2)`，因此測試使用較小 `max_chars`時，
 最小值也會自動縮小。
 
-### 5.2 每個 Block 實際送去 embedding 的文字
+### 5.2 為什麼目前選擇 1,400
+
+`1,400` 是目前的工程 baseline，不是 Embedding 模型的硬限制，也不是已經由公司
+正式資料 A/B 測試證明的最佳值。選擇它作為起始值的理由是：
+
+- 通常能容納一段完整的管理層說明，或一組分析師問題與管理層回答。
+- 比完整長 `SpeakerTurn` 小，可減少 AI、營收、資本支出與風險等多個主題
+  被壓在同一個向量。
+- 比很小的句子級 Chunk 保留更完整的上下文，降低只找到問題、沒找到回答
+  的機率。
+- 搭配 `min_chars=160` 的短段合併，可減少「謝謝」、開場語或單獨一句
+  形成語意過少的向量。
+- 保留足夠的模型輸入安全空間，也控制 Chunk 數量、Neo4j 儲存與 Embedding
+  成本。
+
+所以 `1,400` 代表目前對「檢索精細度、上下文完整度與處理成本」的折衷；
+不代表整份法說會只能有 1,400 字。整份原文可以任意長，過長時會產生多個
+Chunk，完整順序仍由 `SpeakerTurn` 保存。
+
+正式內部資料上線前，應使用相同原文、Embedding 模型、query set、`top_k` 與
+篩選條件，至少比較：
+
+| `max_chars` | 預期取捨 |
+|---:|---|
+| `800` | 檢索較細，但上下文較容易不完整，Chunk 與向量數量較多 |
+| `1,400` | 目前精準度、上下文與成本的折衷 baseline |
+| `2,000` | 上下文較完整，但單一向量可能混入較多主題 |
+| `3,000` | 更接近閱讀段落，但未必適合細節問題的精確檢索 |
+
+定案時應一起評估：
+
+- Recall@5 與 MRR@10。
+- 問題與對應回答是否出現在同一個或相鄰 Chunk。
+- 引用是否完整支持答案，而非只命中關鍵字。
+- 中英文、指定 speaker、長短問題、跨季與多部分問題的表現。
+- 每場法說會的 Chunk 數量、Embedding 時間、Neo4j 儲存與查詢延遲。
+
+只有這些指標在公司真實法說會 Golden Set 上完成比較後，才能將某個
+`max_chars` 宣告為正式參數。
+
+### 5.3 每個 Block 實際送去 embedding 的文字
 
 每個 turn 會先加入：
 
@@ -161,7 +201,7 @@ Demand continues to exceed available supply. We are adding capacity...
 `body_limit = max_chars - len(prefix)`。所以講者名稱與 section 越長，留給原文的字元
 預算越少。當 `body_limit < 32` 時直接報錯，不產生不可用 Block。
 
-### 5.3 過長發言的切點
+### 5.4 過長發言的切點
 
 `build_semantic_blocks()` 會先將連續空白正規化成單一空格，然後處理過長文字：
 
@@ -171,7 +211,7 @@ Demand continues to exceed available supply. We are adding capacity...
 4. 找不到較好邊界時才使用硬切，仍保證不超過上限。
 5. 任何非空白內容都不會因太短而被丟棄。
 
-### 5.4 過短發言的合併
+### 5.5 過短發言的合併
 
 初步切分後，若 Block body 小於 `effective_min`：
 
@@ -186,7 +226,7 @@ Demand continues to exceed available supply. We are adding capacity...
 這個設計用來處理「單獨一句問題」或「Thank you」等短發言，避免產生大量
 語意過少的向量，同時保留問題與回答的關聯。
 
-### 5.5 Block ID 與屬性
+### 5.6 Block ID 與屬性
 
 Block 按最後順序編號：
 
@@ -266,7 +306,52 @@ vector index。
 小量 PoC 可使用現行實作；大量內部法說會正式導入前，應先補上 batch、
 retry、hash skip、provider metadata 與可恢復 checkpoint。
 
-### 6.3 接外部 Embedding GW 的最小契約
+### 6.3 Block 長度與 API Batch 數量是兩個不同參數
+
+- `max_chars=1400`：限制「一個 Block 最多有多少字元」。
+- `batch_size=32` 或 `64`：限制「一次 Embedding API Request 送出幾個 Blocks」。
+
+例如一份法說會被切成 200 個 Blocks，每個最多 1,400 字元。若
+`batch_size=64`，應分成：
+
+```text
+第 1 批：Block   1～64   （64 個）
+第 2 批：Block  65～128  （64 個）
+第 3 批：Block 129～192  （64 個）
+第 4 批：Block 193～200  （ 8 個）
+```
+
+每一批分別呼叫：
+
+```json
+{
+  "model": "embedding-model",
+  "input": [
+    "Block 1 內容",
+    "Block 2 內容",
+    "..."
+  ]
+}
+```
+
+回應必須包含與當批 input 數量完全相同的 vectors，而且順序必須一致，
+才能正確配回原本的 `chunk_id`。分批可降低：
+
+- 單次 request payload 過大與 timeout 風險。
+- Embedding Provider/GW 的記憶體壓力。
+- 觸發 token/batch limit 的機率。
+- 失敗後必須重新計算的範圍。
+
+`32～64` 是尚未取得正式 GW 規格時的建議起始範圍，不是固定標準。
+正式值必須依 GW 的 batch limit、總 token limit、request body limit、rate limit、
+timeout 與壓力測試定案。在供應商規格未明時，可先以 `batch_size=32` 作為
+保守 baseline。
+
+重要：上述是正式全量導入的目標設計。現行 `ingest_transcripts.py` 還沒有
+`batch_size` 參數，仍會將當次 ingestion 的全部 Block 放在同一次 `/api/embed`
+request。
+
+### 6.4 接外部 Embedding GW 的最小契約
 
 外部 GW Adapter 必須將供應商回應正規化成：
 
