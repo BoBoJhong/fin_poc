@@ -7,7 +7,7 @@ Financial／Earnings Call MCP；所有回答都必須通過公司、期間、來
 
 - 自然語言 Company Entity Resolver，輸出資料庫使用的股票代碼 `co_code`。
 - Fiscal Calendar 與「最近一季／上一季／去年同期」Period Resolver。
-- SQLite、Neo4j GraphRAG、已核准外部 SQL DB 與 JSON REST API Adapter。
+- 可切換 SQLite／MariaDB-only／hybrid 財務 Repository，以及 Neo4j 法說會 GraphRAG。
 - Financial Data Schema v2：Raw Payload、Metric Dictionary、Provider Mapping、精確 Financial Facts。
 - Ollama `qwen3-embedding:0.6b` 向量檢索。
 - OpenAI-compatible LLM 答案生成，或不需 LLM 的 Evidence-only 模式。
@@ -18,8 +18,8 @@ Financial／Earnings Call MCP；所有回答都必須通過公司、期間、來
 [專案規格](docs/PROJECT_SPEC.md)。提供 MCP 給同事或新增其他 MCP 時，使用
 [三份正式規格總覽](docs/README.md)。
 
-目前完成項目、真實驗證結果與正式上線缺口請見
-[專案完成狀態](PROJECT_COMPLETION_STATUS.md)。
+目前完成項目、驗證基準與正式上線缺口請見
+[產品就緒說明](docs/PRODUCT_READINESS.md)。
 
 ## 快速開始
 
@@ -75,6 +75,9 @@ curl -X POST http://127.0.0.1:8000/api/v1/chat \
 「最近幾季」先呼叫 `list_earnings_calls`，再以
 `retrieve_multi_period_earnings_call_evidence` 取得逐季隔離的證據。重點型問題會涵蓋營運、
 策略、展望／風險及 Q&A 四個面向；此輸出是可引用的廣度檢索，不宣稱等同完整逐字稿摘要。
+若要多季完整逐字稿，Agent 先列出季度，再對每季分別呼叫
+`get_earnings_call_transcript`，並讀取至各自的 `next_cursor` 為 `null`；不把多季數十萬字
+塞進單一 MCP response。
 
 ## 資料模式
 
@@ -123,19 +126,21 @@ JSON `retrieve_earnings_call_blocks` 仍可交付外部 Agent 使用；`/health/
 
 ## 外部資料接入
 
-### 外部 SQL DB
+### 內部／外部 SQL DB
 
 ```bash
-export TEMP_FINANCE_DATABASE_URL='postgresql+psycopg://readonly:secret@host/db'
+export INTERNAL_FINANCE_DATABASE_URL='mariadb+pymysql://readonly:secret@host/db?charset=utf8mb4'
 cd backend
 ../.venv/bin/python -m scripts.discover_database \
-  --url-env TEMP_FINANCE_DATABASE_URL \
-  --database-id finance_db \
+  --url-env INTERNAL_FINANCE_DATABASE_URL \
+  --database-id internal_finance_db \
   --output ../data/local/db-schema.json \
   --config-output ../config/external_databases.local.json
 ```
 
 人工確認 Mapping 後才能將 dataset 設為 `approved: true`。
+正式 DB-only 財務模式設 `FINANCE_REPOSITORY_MODE=external`；完整 schema 圖、法說會 embedding、
+MCP 流程與小模型 prompt 見 [內部資料庫快速接入](docs/INTERNAL_DATABASE_QUICKSTART.md)。
 
 ### 外部 JSON REST API
 

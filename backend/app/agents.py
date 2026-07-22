@@ -10,7 +10,7 @@ from langgraph.graph import END, START, StateGraph
 from app.company_resolver import CompanyResolutionError, resolve_company_scope
 from app.llm import CompanyLLMClient
 from app.mcp_gateway import MCPGateway
-from app.models import ChatResponse, Citation, Evidence
+from app.models import ChatResponse, Citation, Evidence, PeriodResolution
 from app.period_resolver import canonical_fiscal_label, has_relative_period, resolve_period
 from app.validation import EvidenceValidator
 
@@ -73,6 +73,35 @@ class FinancialAgentService:
         builder.add_edge("semantic_verifier", END)
         return builder.compile()
 
+    async def _resolve_transcript_fiscal_label(
+        self,
+        query: str,
+        co_code: str,
+        resolution: PeriodResolution,
+    ) -> PeriodResolution:
+        """Map company fiscal labels to the canonical stored transcript period."""
+        if self.retrieval_profile != "transcript":
+            return resolution
+        fiscal_label = canonical_fiscal_label(query)
+        if not fiscal_label:
+            return resolution
+        calls = await self.gateway.list_earnings_calls(co_code, 20)
+        matched = next(
+            (call for call in calls if call.quarter.casefold() == fiscal_label.casefold()),
+            None,
+        )
+        return resolution.model_copy(
+            update={
+                "input": fiscal_label,
+                "resolved_period": matched.period if matched else None,
+                "method": (
+                    "company_fiscal_label" if matched else "company_fiscal_label_unavailable"
+                ),
+                "confidence": 1.0 if matched else 0.0,
+                "available_periods": [call.period for call in calls],
+            }
+        )
+
     async def _scope_node(self, state: AgentState) -> AgentState:
         requested_code = state.get("co_code")
         selected_code = self.validator.validate_scope(requested_code) if requested_code else None
@@ -116,6 +145,9 @@ class FinancialAgentService:
         )
         period_resolution = resolve_period(
             state["query"], available_periods, fiscal_calendar=calendar
+        )
+        period_resolution = await self._resolve_transcript_fiscal_label(
+            state["query"], scoped, period_resolution
         )
         period = period_resolution.resolved_period
         return {
@@ -450,6 +482,9 @@ class FinancialAgentService:
             else []
         )
         period_resolution = resolve_period(query, available_periods, fiscal_calendar=calendar)
+        period_resolution = await self._resolve_transcript_fiscal_label(
+            query, scoped, period_resolution
+        )
         period = period_resolution.resolved_period
         if self.retrieval_profile == "transcript":
             routes = ["knowledge"]
@@ -540,11 +575,7 @@ class FinancialAgentService:
         if len(requested) > 4:
             raise ValueError("At most four earnings-call quarters may be compared at once.")
         if requested:
-            lookup = {
-                key.casefold(): call
-                for call in calls
-                for key in (call.period, call.quarter)
-            }
+            lookup = {key.casefold(): call for call in calls for key in (call.period, call.quarter)}
             missing = [value for value in requested if value.casefold() not in lookup]
             if missing:
                 available = ", ".join(call.quarter for call in calls) or "none"
@@ -604,9 +635,7 @@ class FinancialAgentService:
             return {
                 "call": call,
                 "evidence": evidence,
-                "coverage_mode": (
-                    "broad_facet_retrieval" if broad_summary else "topic_retrieval"
-                ),
+                "coverage_mode": ("broad_facet_retrieval" if broad_summary else "topic_retrieval"),
                 "coverage_queries": coverage_queries,
             }
 

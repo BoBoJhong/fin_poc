@@ -101,10 +101,7 @@ def create_indexes(driver, dimensions: int, database: str, vector_index: str, fu
         "CREATE CONSTRAINT chunk_id IF NOT EXISTS FOR (n:Chunk) REQUIRE n.chunk_id IS UNIQUE",
         database_=database,
     )
-    driver.execute_query(
-        "CREATE CONSTRAINT speaker_id IF NOT EXISTS FOR (n:Speaker) REQUIRE n.speaker_id IS UNIQUE",
-        database_=database,
-    )
+    driver.execute_query("DROP CONSTRAINT speaker_id IF EXISTS", database_=database)
     driver.execute_query(
         "CREATE CONSTRAINT speaker_turn_id IF NOT EXISTS "
         "FOR (n:SpeakerTurn) REQUIRE n.turn_id IS UNIQUE",

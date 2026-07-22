@@ -2,8 +2,8 @@
 
 > 文件層級：內部驗收附錄。正式產品範圍與發布基線請見 [PROJECT_SPEC.md](PROJECT_SPEC.md)。
 
-- 文件版本：`1.2`
-- 日期：`2026-07-20`
+- 文件版本：`1.3`
+- 日期：`2026-07-23`
 - 產品定位：可交付、可驗證、來源隔離的 Financial／Earnings Call RAG MCP
 
 ## 1. 已落地能力
@@ -29,6 +29,8 @@
 | Financial Data Schema v2 | 已完成 | raw payload、metric dictionary、provider mapping、exact facts、revision history |
 | Dynamic metric-key normalization | 已完成 | nested keys、approval gate、unknown-key quarantine、REST adapter tests |
 | Large metric-set selection | 已完成 | metric code、display name、Alias、provider key deterministic ranking |
+| Backend regression | 已完成 | `85 passed`（2026-07-23） |
+| 精簡法說會圖譜 | 已完成 | 講者與當時職稱保存在 SpeakerTurn，不建立全域 Speaker 節點 |
 
 ## 2. 公司解析保證
 
@@ -132,7 +134,7 @@ Frontend
 
 ## 7. 外部來源與部署
 
-Financial MCP 可合併 SQLite、已核准外部 SQL DB 及已核准 JSON REST API。Financial Data Schema v2 保存原始 Payload，透過 Metric Dictionary 與 Provider Mapping 將大量動態 Key 轉成具有 statement、duration、scope、unit、精確 decimal 與版本的 Facts。未知指標不會由模型猜測或直接回答。所有來源再轉成穩定 Evidence；供應商欄位不會滲入公開 MCP Schema。
+Financial MCP 可選 SQLite、MariaDB-only 或合併已核准 SQL DB／JSON REST API 的 hybrid 模式。正式內部 DB 可選擇同步 schema/table/column/PK/index/FK catalog 至 Neo4j，但資料列不做 embedding；只有法說會原文切塊並 embedding。結構化財務數值以參數化 SQL 精確取得。Financial Data Schema v2 保存原始 Payload，透過 Metric Dictionary 與 Provider Mapping 將大量動態 Key 轉成具有 statement、duration、scope、unit、精確 decimal 與版本的 Facts。未知指標不會由模型猜測或直接回答。所有來源再轉成穩定 Evidence；供應商欄位不會滲入公開 MCP Schema。真實 MariaDB 上線仍需部署方提供唯讀連線、審核 mapping 並重跑 golden set。
 
 Server 可以分開設定 `MCP_SERVER_HOST`（本機 Client 連線位址）與 `MCP_BIND_HOST`（監聽位址）。私人部署可啟用 `MCP_AUTH_MODE=static`；Internet-facing 部署仍須使用組織 OAuth/OIDC Gateway。完整操作見 `docs/DEPLOYMENT.md`。
 

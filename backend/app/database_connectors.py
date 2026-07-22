@@ -12,14 +12,34 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from dotenv import dotenv_values
 from sqlalchemy import MetaData, Table, and_, create_engine, inspect, select
 from sqlalchemy.engine import Engine
 
-from app.models import CompanySummary, Evidence, FiscalCalendar, SourceLocator, SourcePreview, SourceType
+from app.models import (
+    CompanySummary,
+    Evidence,
+    FiscalCalendar,
+    SourceLocator,
+    SourcePreview,
+    SourceType,
+)
 
 
 logger = logging.getLogger(__name__)
 SAFE_ID = re.compile(r"^[A-Za-z0-9_.-]+$")
+PROJECT_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+
+
+def resolve_environment_value(name: str, env_file: Path = PROJECT_ENV_FILE) -> str:
+    """Resolve dynamic registry secrets without copying them into settings or logs."""
+    value = os.getenv(name)
+    if value is not None:
+        return value.strip()
+    if not env_file.is_file():
+        return ""
+    file_value = dotenv_values(env_file).get(name)
+    return str(file_value).strip() if file_value is not None else ""
 
 
 class MetricColumnMapping(BaseModel):
@@ -63,6 +83,77 @@ class ExternalDatasetConfig(BaseModel):
         return self
 
 
+class CompanyColumnMapping(BaseModel):
+    """Maps a company master without assuming the vendor's table names."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    company_code: str
+    company_name: str
+    industry: str | None = None
+    aliases: str | None = None
+    fiscal_year_end_month: str | None = None
+    timezone: str | None = None
+    primary_key: list[str] = Field(default_factory=list)
+
+
+class ExternalCompanyDatasetConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    table: str
+    schema_name: str | None = None
+    approved: bool = False
+    mapping: CompanyColumnMapping
+    row_limit: int = Field(default=10000, ge=1, le=100000)
+
+    @model_validator(mode="after")
+    def validate_identifiers(self) -> "ExternalCompanyDatasetConfig":
+        if not SAFE_ID.fullmatch(self.id):
+            raise ValueError(f"Unsafe company dataset id: {self.id!r}")
+        if not self.table.strip():
+            raise ValueError("Mapped table name cannot be empty")
+        return self
+
+
+class NarrativeColumnMapping(BaseModel):
+    """Maps approved internal narrative text that may be copied and embedded."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    company_code: str
+    text: str
+    title: str | None = None
+    period: str | None = None
+    source_id: str | None = None
+    data_version: str | None = None
+    updated_at: str | None = None
+    primary_key: list[str] = Field(default_factory=list)
+
+
+class ExternalNarrativeDatasetConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    table: str
+    schema_name: str | None = None
+    approved: bool = False
+    mapping: NarrativeColumnMapping
+    default_title: str = "Internal financial narrative"
+    source_type: str = "financial_report"
+    row_limit: int = Field(default=1000, ge=1, le=10000)
+
+    @model_validator(mode="after")
+    def validate_identifiers(self) -> "ExternalNarrativeDatasetConfig":
+        if not SAFE_ID.fullmatch(self.id):
+            raise ValueError(f"Unsafe narrative dataset id: {self.id!r}")
+        if not self.table.strip():
+            raise ValueError("Mapped table name cannot be empty")
+        if self.source_type not in {"financial_report", "url"}:
+            raise ValueError("Narrative source_type must be financial_report or url")
+        return self
+
+
 class ExternalDatabaseConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -73,7 +164,9 @@ class ExternalDatabaseConfig(BaseModel):
     pool_size: int = Field(default=5, ge=1, le=100)
     max_overflow: int = Field(default=10, ge=0, le=200)
     pool_timeout_seconds: float = Field(default=10.0, gt=0, le=120)
-    datasets: list[ExternalDatasetConfig]
+    datasets: list[ExternalDatasetConfig] = Field(default_factory=list)
+    company_datasets: list[ExternalCompanyDatasetConfig] = Field(default_factory=list)
+    narrative_datasets: list[ExternalNarrativeDatasetConfig] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_source(self) -> "ExternalDatabaseConfig":
@@ -81,7 +174,8 @@ class ExternalDatabaseConfig(BaseModel):
             raise ValueError(f"Unsafe database id: {self.id!r}")
         if not self.url_env or not self.url_env.replace("_", "").isalnum():
             raise ValueError("url_env must be an environment-variable name")
-        if len({item.id for item in self.datasets}) != len(self.datasets):
+        all_datasets = [*self.datasets, *self.company_datasets, *self.narrative_datasets]
+        if len({item.id for item in all_datasets}) != len(all_datasets):
             raise ValueError(f"Duplicate dataset id in database {self.id}")
         return self
 
@@ -114,6 +208,50 @@ def _canonical_hash(value: dict[str, Any]) -> str:
     return f"sha256:{hashlib.sha256(payload.encode('utf-8')).hexdigest()}"
 
 
+def _mapped_columns(mapping: BaseModel) -> set[str]:
+    columns: set[str] = set()
+    for key, value in mapping.model_dump(exclude_none=True).items():
+        if key == "primary_key":
+            columns.update(value)
+        else:
+            columns.add(value)
+    return columns
+
+
+def _parse_aliases(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        return [str(item).strip() for item in value if str(item).strip()]
+    raw = str(value).strip()
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, list):
+            return [str(item).strip() for item in parsed if str(item).strip()]
+    except json.JSONDecodeError:
+        pass
+    return [item.strip() for item in re.split(r"[,;|、]", raw) if item.strip()]
+
+
+class NarrativeRecord(BaseModel):
+    database_id: str
+    dataset_id: str
+    schema_name: str | None = None
+    table: str
+    co_code: str
+    source_id: str
+    source_type: str
+    title: str
+    text: str
+    period: str | None = None
+    primary_key: str
+    captured_at: str | None = None
+    content_hash: str
+    data_version: str
+
+
 class ExternalSQLFinanceRepository:
     """Read-only SQLAlchemy adapter driven by an explicitly approved column mapping.
 
@@ -123,18 +261,16 @@ class ExternalSQLFinanceRepository:
 
     def __init__(self, config: ExternalDatabaseConfig):
         self.config = config
-        url = os.getenv(config.url_env, "").strip()
+        url = resolve_environment_value(config.url_env)
         if not url:
             raise RuntimeError(
-                f"External database {config.id!r} requires environment variable "
-                f"{config.url_env}."
+                f"External database {config.id!r} requires environment variable {config.url_env}."
             )
         approved = [item for item in config.datasets if item.approved]
         if not approved:
-            raise RuntimeError(
-                f"External database {config.id!r} has no approved dataset mapping."
-            )
+            raise RuntimeError(f"External database {config.id!r} has no approved dataset mapping.")
         self.datasets = approved
+        self.company_datasets = [item for item in config.company_datasets if item.approved]
         self.engine: Engine = create_engine(
             url,
             connect_args=config.connect_args,
@@ -150,22 +286,14 @@ class ExternalSQLFinanceRepository:
 
     def _validate_schema(self) -> None:
         inspector = inspect(self.engine)
-        for dataset in self.datasets:
+        for dataset in [*self.datasets, *self.company_datasets]:
             columns = {
                 item["name"]
                 for item in inspector.get_columns(dataset.table, schema=dataset.schema_name)
             }
             if not columns:
-                raise RuntimeError(
-                    f"Mapped table not found: {self.config.id}.{dataset.table}"
-                )
-            mapped = dataset.mapping.model_dump(exclude_none=True)
-            required_columns: set[str] = set()
-            for key, value in mapped.items():
-                if key == "primary_key":
-                    required_columns.update(value)
-                else:
-                    required_columns.add(value)
+                raise RuntimeError(f"Mapped table not found: {self.config.id}.{dataset.table}")
+            required_columns = _mapped_columns(dataset.mapping)
             missing = sorted(required_columns - columns)
             if missing:
                 raise RuntimeError(
@@ -173,7 +301,7 @@ class ExternalSQLFinanceRepository:
                     f"missing columns: {', '.join(missing)}"
                 )
 
-    def _table(self, dataset: ExternalDatasetConfig) -> Table:
+    def _table(self, dataset: ExternalDatasetConfig | ExternalCompanyDatasetConfig) -> Table:
         key = dataset.id
         if key not in self._tables:
             self._tables[key] = Table(
@@ -201,9 +329,7 @@ class ExternalSQLFinanceRepository:
         digest = hashlib.sha256(str(raw).encode("utf-8")).hexdigest()[:24]
         return f"ext-{self.config.id}-{dataset.id}-{digest}"
 
-    def _row_to_evidence(
-        self, dataset: ExternalDatasetConfig, raw_row: dict[str, Any]
-    ) -> Evidence:
+    def _row_to_evidence(self, dataset: ExternalDatasetConfig, raw_row: dict[str, Any]) -> Evidence:
         row = {key: _json_value(value) for key, value in raw_row.items()}
         mapping = dataset.mapping
         co_code = str(row[mapping.company_code]).strip().upper()
@@ -267,7 +393,8 @@ class ExternalSQLFinanceRepository:
             co_code=co_code,
             source_type=SourceType.DATABASE,
             title=evidence.title,
-            live_url=self._value(row, mapping.source_url) or (existing.live_url if existing else None),
+            live_url=self._value(row, mapping.source_url)
+            or (existing.live_url if existing else None),
             locator=evidence.locator,
             captured_at=evidence.captured_at or (existing.captured_at if existing else None),
             content_hash=_canonical_hash({"records": records}),
@@ -285,6 +412,25 @@ class ExternalSQLFinanceRepository:
         def run() -> list[CompanySummary]:
             companies: dict[str, CompanySummary] = {}
             with self.engine.connect() as connection:
+                for dataset in self.company_datasets:
+                    table = self._table(dataset)
+                    mapping = dataset.mapping
+                    statement = select(table).limit(dataset.row_limit)
+                    for raw in connection.execute(statement).mappings():
+                        row = dict(raw)
+                        code = str(row[mapping.company_code]).strip().upper()
+                        if not code:
+                            continue
+                        companies[code] = CompanySummary(
+                            co_code=code,
+                            company_name=str(row[mapping.company_name]).strip() or code,
+                            industry=(
+                                str(self._value(row, mapping.industry)).strip()
+                                if self._value(row, mapping.industry) is not None
+                                else None
+                            ),
+                            aliases=_parse_aliases(self._value(row, mapping.aliases)),
+                        )
                 for dataset in self.datasets:
                     table = self._table(dataset)
                     mapping = dataset.mapping
@@ -345,11 +491,133 @@ class ExternalSQLFinanceRepository:
         return sorted({item.period for item in evidence if item.period})
 
     async def get_fiscal_calendar(self, co_code: str) -> FiscalCalendar | None:
-        del co_code
-        return None
+        code = co_code.strip().upper()
+
+        def run() -> FiscalCalendar | None:
+            with self.engine.connect() as connection:
+                for dataset in self.company_datasets:
+                    mapping = dataset.mapping
+                    if not mapping.fiscal_year_end_month:
+                        continue
+                    table = self._table(dataset)
+                    statement = select(table).where(table.c[mapping.company_code] == code).limit(1)
+                    row = connection.execute(statement).mappings().first()
+                    if row is None:
+                        continue
+                    month = int(row[mapping.fiscal_year_end_month])
+                    timezone = self._value(dict(row), mapping.timezone, "UTC")
+                    return FiscalCalendar(
+                        co_code=code,
+                        fiscal_year_end_month=month,
+                        timezone=str(timezone or "UTC"),
+                        source=f"external_database:{self.config.id}:{dataset.id}",
+                    )
+            return None
+
+        return await asyncio.to_thread(run)
 
     async def close(self) -> None:
         await asyncio.to_thread(self.engine.dispose)
+
+
+class ExternalSQLNarrativeReader:
+    """Reads only explicitly approved text columns for controlled Neo4j ingestion."""
+
+    def __init__(self, config: ExternalDatabaseConfig):
+        self.config = config
+        url = resolve_environment_value(config.url_env)
+        if not url:
+            raise RuntimeError(
+                f"External database {config.id!r} requires environment variable {config.url_env}."
+            )
+        self.datasets = [item for item in config.narrative_datasets if item.approved]
+        if not self.datasets:
+            raise RuntimeError(
+                f"External database {config.id!r} has no approved narrative mapping."
+            )
+        self.engine: Engine = create_engine(
+            url,
+            connect_args=config.connect_args,
+            pool_size=config.pool_size,
+            max_overflow=config.max_overflow,
+            pool_timeout=config.pool_timeout_seconds,
+            pool_pre_ping=True,
+            future=True,
+        )
+        self._tables: dict[str, Table] = {}
+        inspector = inspect(self.engine)
+        for dataset in self.datasets:
+            columns = {
+                item["name"]
+                for item in inspector.get_columns(dataset.table, schema=dataset.schema_name)
+            }
+            missing = sorted(_mapped_columns(dataset.mapping) - columns)
+            if missing:
+                raise RuntimeError(
+                    f"Invalid narrative mapping for {config.id}.{dataset.id}; "
+                    f"missing columns: {', '.join(missing)}"
+                )
+
+    def _table(self, dataset: ExternalNarrativeDatasetConfig) -> Table:
+        if dataset.id not in self._tables:
+            self._tables[dataset.id] = Table(
+                dataset.table,
+                MetaData(),
+                schema=dataset.schema_name,
+                autoload_with=self.engine,
+            )
+        return self._tables[dataset.id]
+
+    def _source_id(self, dataset: ExternalNarrativeDatasetConfig, row: dict[str, Any]) -> str:
+        mapping = dataset.mapping
+        raw = row.get(mapping.source_id) if mapping.source_id else None
+        keys = mapping.primary_key or [mapping.company_code, mapping.text]
+        identity = "|".join(str(row.get(column, "")) for column in keys)
+        digest = hashlib.sha256(f"{raw or ''}|{identity}".encode("utf-8")).hexdigest()[:24]
+        return f"dbdoc-{self.config.id}-{dataset.id}-{digest}"
+
+    def read(self) -> list[NarrativeRecord]:
+        records: list[NarrativeRecord] = []
+        with self.engine.connect() as connection:
+            for dataset in self.datasets:
+                table = self._table(dataset)
+                mapping = dataset.mapping
+                rows = connection.execute(select(table).limit(dataset.row_limit)).mappings()
+                for raw in rows:
+                    row = {key: _json_value(value) for key, value in dict(raw).items()}
+                    text = str(row.get(mapping.text) or "").strip()
+                    code = str(row.get(mapping.company_code) or "").strip().upper()
+                    if not text or not code:
+                        continue
+                    keys = mapping.primary_key or [mapping.company_code, mapping.text]
+                    primary_key = "|".join(str(row.get(column, "")) for column in keys)
+                    content_hash = _canonical_hash(row)
+                    title = row.get(mapping.title) if mapping.title else None
+                    version = row.get(mapping.data_version) if mapping.data_version else None
+                    captured_at = row.get(mapping.updated_at) if mapping.updated_at else None
+                    period = row.get(mapping.period) if mapping.period else None
+                    records.append(
+                        NarrativeRecord(
+                            database_id=self.config.id,
+                            dataset_id=dataset.id,
+                            schema_name=dataset.schema_name,
+                            table=dataset.table,
+                            co_code=code,
+                            source_id=self._source_id(dataset, row),
+                            source_type=dataset.source_type,
+                            title=str(title or dataset.default_title),
+                            text=text,
+                            period=str(period).strip() if period is not None else None,
+                            primary_key=primary_key,
+                            captured_at=str(captured_at) if captured_at is not None else None,
+                            content_hash=content_hash,
+                            data_version=str(version or content_hash),
+                        )
+                    )
+        return records
+
+    def close(self) -> None:
+        self.engine.dispose()
 
 
 class CompositeFinanceRepository:
@@ -470,6 +738,11 @@ def discover_database(url: str) -> dict[str, Any]:
         "source_url": ("source_url", "document_url", "filing_url", "url"),
         "data_version": ("data_version", "version", "revision"),
         "updated_at": ("updated_at", "captured_at", "loaded_at", "created_at"),
+        "aliases": ("aliases", "alias", "company_aliases", "other_names"),
+        "fiscal_year_end_month": ("fiscal_year_end_month", "fy_end_month"),
+        "timezone": ("timezone", "time_zone", "tz"),
+        "text": ("content", "text", "body", "narrative", "description", "summary"),
+        "title": ("title", "document_title", "subject", "heading"),
     }
     try:
         tables: list[dict[str, Any]] = []
@@ -478,9 +751,11 @@ def discover_database(url: str) -> dict[str, Any]:
                 continue
             for table_name in inspector.get_table_names(schema=schema_name):
                 columns = inspector.get_columns(table_name, schema=schema_name)
-                primary_key = inspector.get_pk_constraint(
-                    table_name, schema=schema_name
-                ).get("constrained_columns", [])
+                primary_key = inspector.get_pk_constraint(table_name, schema=schema_name).get(
+                    "constrained_columns", []
+                )
+                foreign_keys = inspector.get_foreign_keys(table_name, schema=schema_name)
+                indexes = inspector.get_indexes(table_name, schema=schema_name)
                 names = {str(column["name"]).lower(): str(column["name"]) for column in columns}
                 suggestion = {
                     target: next((names[name] for name in candidates if name in names), None)
@@ -501,49 +776,116 @@ def discover_database(url: str) -> dict[str, Any]:
                             for column in columns
                         ],
                         "primary_key": primary_key,
+                        "foreign_keys": [
+                            {
+                                "name": item.get("name"),
+                                "constrained_columns": item.get("constrained_columns", []),
+                                "referred_schema": item.get("referred_schema"),
+                                "referred_table": item.get("referred_table"),
+                                "referred_columns": item.get("referred_columns", []),
+                            }
+                            for item in foreign_keys
+                        ],
+                        "indexes": [
+                            {
+                                "name": item.get("name"),
+                                "columns": item.get("column_names", []),
+                                "unique": bool(item.get("unique", False)),
+                            }
+                            for item in indexes
+                        ],
                         "mapping_suggestion": suggestion,
                         "required_mapping_score": f"{score}/4",
                         "ready_for_review": score == 4,
+                        "company_mapping_ready_for_review": bool(
+                            suggestion["company_code"] and suggestion["company_name"]
+                        ),
+                        "narrative_mapping_ready_for_review": bool(
+                            suggestion["company_code"] and suggestion["text"]
+                        ),
                     }
                 )
         tables.sort(key=lambda item: item["required_mapping_score"], reverse=True)
-        return {"tables": tables, "credentials_included": False}
+        return {
+            "dialect": engine.dialect.name,
+            "driver": engine.dialect.driver,
+            "tables": tables,
+            "credentials_included": False,
+        }
     finally:
         engine.dispose()
 
 
-def build_registry_draft(
-    report: dict[str, Any], database_id: str, url_env: str
-) -> dict[str, Any]:
+def build_registry_draft(report: dict[str, Any], database_id: str, url_env: str) -> dict[str, Any]:
     """Build a disabled-by-approval registry draft from high-confidence table matches."""
 
     datasets: list[dict[str, Any]] = []
+    company_datasets: list[dict[str, Any]] = []
+    narrative_datasets: list[dict[str, Any]] = []
     for table in report.get("tables", []):
-        if not table.get("ready_for_review"):
-            continue
-        mapping = {
-            key: value
-            for key, value in table["mapping_suggestion"].items()
-            if value is not None
-        }
-        mapping["primary_key"] = table.get("primary_key") or [
-            mapping["company_code"],
-            mapping["period"],
-            mapping["metric"],
-        ]
-        dataset_id = re.sub(r"[^A-Za-z0-9_.-]+", "_", table["table"])
-        datasets.append(
-            {
-                "id": dataset_id,
-                "table": table["table"],
-                "schema_name": table.get("schema_name"),
-                "approved": False,
-                "mapping": mapping,
-                "default_unit": "UNKNOWN",
-                "default_scope": "external_database",
-                "row_limit": 1000,
+        base_id = re.sub(r"[^A-Za-z0-9_.-]+", "_", table["table"])
+        if table.get("ready_for_review"):
+            mapping = {
+                key: value
+                for key, value in table["mapping_suggestion"].items()
+                if value is not None and key in MetricColumnMapping.model_fields
             }
-        )
+            mapping["primary_key"] = table.get("primary_key") or [
+                mapping["company_code"],
+                mapping["period"],
+                mapping["metric"],
+            ]
+            datasets.append(
+                {
+                    "id": f"{base_id}_metrics",
+                    "table": table["table"],
+                    "schema_name": table.get("schema_name"),
+                    "approved": False,
+                    "mapping": mapping,
+                    "default_unit": "UNKNOWN",
+                    "default_scope": "external_database",
+                    "row_limit": 1000,
+                }
+            )
+        if table.get("company_mapping_ready_for_review"):
+            mapping = {
+                key: value
+                for key, value in table["mapping_suggestion"].items()
+                if value is not None and key in CompanyColumnMapping.model_fields
+            }
+            mapping["primary_key"] = table.get("primary_key") or [mapping["company_code"]]
+            company_datasets.append(
+                {
+                    "id": f"{base_id}_companies",
+                    "table": table["table"],
+                    "schema_name": table.get("schema_name"),
+                    "approved": False,
+                    "mapping": mapping,
+                    "row_limit": 10000,
+                }
+            )
+        if table.get("narrative_mapping_ready_for_review"):
+            mapping = {
+                key: value
+                for key, value in table["mapping_suggestion"].items()
+                if value is not None and key in NarrativeColumnMapping.model_fields
+            }
+            mapping["primary_key"] = table.get("primary_key") or [
+                mapping["company_code"],
+                mapping["text"],
+            ]
+            narrative_datasets.append(
+                {
+                    "id": f"{base_id}_narratives",
+                    "table": table["table"],
+                    "schema_name": table.get("schema_name"),
+                    "approved": False,
+                    "mapping": mapping,
+                    "default_title": "Internal financial narrative",
+                    "source_type": "financial_report",
+                    "row_limit": 1000,
+                }
+            )
     draft = {
         "version": 1,
         "databases": [
@@ -556,6 +898,8 @@ def build_registry_draft(
                 "max_overflow": 10,
                 "pool_timeout_seconds": 10.0,
                 "datasets": datasets,
+                "company_datasets": company_datasets,
+                "narrative_datasets": narrative_datasets,
             }
         ],
     }

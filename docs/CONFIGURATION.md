@@ -22,13 +22,15 @@ real credentials. Defaults below match `.env.example` unless stated otherwise.
 |---|---|---|
 | `SQLITE_PATH` | `data/local/financial.sqlite3` | Runtime SQLite path |
 | `SQLITE_READ_ONLY` | `true` | Open SQLite in read-only mode |
+| `FINANCE_REPOSITORY_MODE` | `hybrid` | `sqlite`, `external`, or `hybrid`; use `external` for production MariaDB-only finance |
 | `EXTERNAL_DATABASE_CONFIG_PATH` | `config/external_databases.local.json` | SQL registry |
 | `EXTERNAL_DATABASE_STRICT` | `false` | Fail startup/query when an external DB is unavailable |
 | `EXTERNAL_API_CONFIG_PATH` | `config/external_apis.local.json` | REST API registry |
 | `EXTERNAL_API_STRICT` | `false` | Fail when an approved REST provider is unavailable |
 
 Provider database URLs and API keys use registry-selected environment variable names, for example
-`TEMP_FINANCE_DATABASE_URL` and `VENDOR_FINANCE_API_KEY`.
+`INTERNAL_FINANCE_DATABASE_URL` and `VENDOR_FINANCE_API_KEY`. MariaDB through PyMySQL uses a URL
+such as `mariadb+pymysql://readonly_user:<password>@db-host/finance?charset=utf8mb4`.
 
 ## Neo4j and embedding
 

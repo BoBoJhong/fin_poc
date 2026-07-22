@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
 
-from app.database_connectors import build_registry_draft, discover_database
+from app.database_connectors import (
+    build_registry_draft,
+    discover_database,
+    resolve_environment_value,
+)
 
 
 def main() -> None:
@@ -28,7 +31,7 @@ def main() -> None:
         help="Safe identifier used in the generated registry draft.",
     )
     args = parser.parse_args()
-    url = os.getenv(args.url_env, "").strip()
+    url = resolve_environment_value(args.url_env)
     if not url:
         parser.error(f"Environment variable {args.url_env!r} is empty")
     report = discover_database(url)

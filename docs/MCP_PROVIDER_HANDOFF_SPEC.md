@@ -201,6 +201,13 @@ All public tools use the common fields:
 `list_earnings_calls` accepts `limit` (maximum `20`). The multi-period evidence tool accepts
 `quarters` and `limit`; it compares at most four calls and never merges their evidence arrays.
 
+Company fiscal labels are resolved through the available call records before retrieval. For
+example, Microsoft `FY2026 Q2` maps to stored canonical period `2025Q4` in answer, evidence, block
+and transcript-reader paths. To retrieve several complete transcripts, call `list_earnings_calls`,
+then call `get_earnings_call_transcript` separately for every selected quarter and continue each
+cursor until `next_cursor` is `null`. This bounded workflow avoids oversized MCP responses while
+preserving complete ordered content.
+
 Input rules:
 
 - Prefer identifying the company naturally in `query`.

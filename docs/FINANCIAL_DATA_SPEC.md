@@ -241,8 +241,8 @@ Dynamic mode uses `dynamic_metric_mapping`, `metric_definitions` and
 ## 8. Query strategy
 
 Structured numeric facts are queried deterministically by company, period, metric and dimensions.
-Embedding is used for metric alias resolution and narrative financial documents, not to choose a
-numeric value by similarity.
+Embedding is used for earnings-call transcript chunks, not to resolve or choose a financial value.
+Metric aliases and structured facts use deterministic mappings and SQL queries.
 
 Before the global Evidence limit is applied, database facts are deterministically ranked against the
 question using approved `metric_code`, display name, aliases and provider key. This prevents an

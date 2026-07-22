@@ -25,7 +25,7 @@ User / External Agent
                                     |
                                     +--> Knowledge MCP (8001, transcript scope)
 
-Finance MCP --> SQLite + approved external SQL DB + approved external REST API
+Finance MCP --> selectable SQLite / approved external SQL DB / hybrid repositories
 Knowledge MCP --> Neo4j scoped vector/full-text retrieval + Qwen embedding
 Answer pipeline --> OpenAI-compatible LLM or deterministic Mock mode
 ```
@@ -59,8 +59,8 @@ Tools:
 - `ask_financial_rag`
 - `retrieve_financial_evidence`
 
-Allowed sources: `database`, `financial_report`, `url`. The `database` source includes normalized
-SQLite, approved external SQL and approved external financial API records.
+Allowed sources: `database`, `financial_report`, `url`. In production DB-only mode, `database`
+means the approved internal MariaDB mappings; SQLite and external API fallback are disabled.
 
 ### Earnings Call MCP
 
@@ -121,7 +121,11 @@ only.
 ### External SQL
 
 SQLAlchemy reflection over explicitly approved tables and column mappings. Credentials are stored in
-environment variables; arbitrary SQL is forbidden.
+environment variables; arbitrary SQL is forbidden. `FINANCE_REPOSITORY_MODE=external` makes this
+the only financial repository. Company-master mappings supply names, aliases and fiscal calendars.
+The schema catalog (schema/table/column/PK/index/FK) may be synchronized to Neo4j for operations,
+but internal database rows are not embedded. Only earnings-call transcript chunks are embedded. See
+[docs/INTERNAL_DATABASE_QUICKSTART.md](docs/INTERNAL_DATABASE_QUICKSTART.md).
 
 ### External REST API
 
@@ -141,8 +145,8 @@ raw provider payload
   -> database Evidence
 ```
 
-Numeric facts use deterministic structured queries. Embedding assists metric aliases and narrative
-documents; it does not select financial values by vector similarity. Full rules are defined in
+Numeric facts use deterministic structured queries. Embedding is used for transcript chunks; it
+does not select financial values by vector similarity. Full rules are defined in
 [docs/FINANCIAL_DATA_SPEC.md](docs/FINANCIAL_DATA_SPEC.md).
 
 ### Neo4j GraphRAG

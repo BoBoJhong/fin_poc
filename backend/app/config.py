@@ -26,6 +26,7 @@ class Settings(BaseSettings):
 
     sqlite_path: str = "data/local/financial.sqlite3"
     sqlite_read_only: bool = True
+    finance_repository_mode: Literal["sqlite", "external", "hybrid"] = "hybrid"
     external_database_config_path: str = "config/external_databases.local.json"
     external_database_strict: bool = False
     external_api_config_path: str = "config/external_apis.local.json"

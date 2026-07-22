@@ -2,9 +2,9 @@
   "version": 1,
   "databases": [
     {
-      "id": "temporary_finance_db",
+      "id": "internal_finance_db",
       "enabled": true,
-      "url_env": "TEMP_FINANCE_DATABASE_URL",
+      "url_env": "INTERNAL_FINANCE_DATABASE_URL",
       "connect_args": {},
       "pool_size": 5,
       "max_overflow": 10,
@@ -34,7 +34,26 @@
           "default_scope": "external_database",
           "row_limit": 1000
         }
-      ]
+      ],
+      "company_datasets": [
+        {
+          "id": "company_master",
+          "table": "company_master",
+          "schema_name": null,
+          "approved": false,
+          "mapping": {
+            "company_code": "co_code",
+            "company_name": "company_name",
+            "industry": "industry",
+            "aliases": "aliases_json",
+            "fiscal_year_end_month": "fiscal_year_end_month",
+            "timezone": "timezone",
+            "primary_key": ["co_code"]
+          },
+          "row_limit": 10000
+        }
+      ],
+      "narrative_datasets": []
     }
   ]
 }

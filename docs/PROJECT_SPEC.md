@@ -2,7 +2,7 @@
 
 - 產品版本：`1.0.0`
 - 公開 MCP Schema：`1.1`
-- 最後更新：`2026-07-22`
+- 最後更新：`2026-07-23`
 
 這是本專案唯一的主要產品與工程規格。產品範圍、架構、啟動、資料接入、部署、可靠度、
 併發與驗收都以本文件為入口。對外 MCP 串接與新增 MCP 分別由兩份專用規格管理；只有修改
@@ -41,7 +41,8 @@ ports `8001`、`8002` 是內部 Knowledge／Finance MCP，不提供給外部 Cli
 - 法說會問題使用 verified RAG；完整／最近一場內容使用依 event date 與 speaker turn 的確定性 reader。
 - 財務與法說會來源隔離、引用、拒答與 Source Preview。
 - Financial Schema v2、動態財務 Key、精確 Decimal、口徑與資料版本。
-- SQLite、Neo4j、核准外部 SQL DB、核准 JSON REST API Adapter。
+- 可切換 SQLite／MariaDB-only／hybrid 財務 repository、Neo4j、核准 SQL DB 與 JSON REST API Adapter。
+- 內部 DB schema catalog 圖譜與公司主檔 mapping；只有法說會原文切塊並 embedding。
 - Qwen `qwen3-embedding:0.6b` 檢索。
 - 公開 MCP Runtime Schema `1.1`。
 - Evidence-only 模式、併發限制與受控 `503`。
@@ -297,6 +298,7 @@ cd backend
 | [完整 MCP Output Spec](VERIFIED_RAG_MCP_OUTPUT_SPEC.md) | 修改或驗證 Response 欄位 |
 | [MCP Schema 變更指南](MCP_API_DESIGN_AND_CHANGE_GUIDE.md) | 修改 Tool／Schema／版本 |
 | [Financial Schema v2](FINANCIAL_DATA_SPEC.md) | 接入或映射財務指標 |
+| [內部資料庫快速接入](INTERNAL_DATABASE_QUICKSTART.md) | 重現專案、串接 MariaDB、匯入法說會與使用小模型 prompts |
 | [外部整合](EXTERNAL_INTEGRATION_GUIDE.md) | 接 LLM、SQL DB、REST API |
 | [新增外部 MCP](ADDING_EXTERNAL_MCP.md) | 接入第三方 MCP |
 | [Deployment](DEPLOYMENT.md) | 正式部署與維運 |

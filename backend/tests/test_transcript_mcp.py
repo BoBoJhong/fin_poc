@@ -4,7 +4,7 @@ from fastmcp import Client
 from app.agents import FinancialAgentService
 from app.config import Settings
 from app.llm import CompanyLLMClient
-from app.models import EarningsCallRecord, Evidence, SourceLocator, SourceType
+from app.models import EarningsCallRecord, Evidence, PeriodResolution, SourceLocator, SourceType
 from app.validation import EvidenceValidator
 from mcp_servers.transcript import create_transcript_mcp
 
@@ -44,9 +44,7 @@ async def test_multi_period_retrieval_keeps_quarter_evidence_isolated() -> None:
                 ),
             ][:limit]
 
-        async def search_documents(
-            self, query, co_code, top_k=5, period=None, source_types=None
-        ):
+        async def search_documents(self, query, co_code, top_k=5, period=None, source_types=None):
             assert co_code == "MSFT"
             assert source_types == ("transcript",)
             return [
@@ -75,6 +73,21 @@ async def test_multi_period_retrieval_keeps_quarter_evidence_isolated() -> None:
         return {"co_code": "MSFT", "period_resolution": {}}
 
     service._scope_node = scoped_state
+    mapped = await service._resolve_transcript_fiscal_label(
+        "微軟 FY2026 Q2 法說會",
+        "MSFT",
+        PeriodResolution(
+            input="2026Q2",
+            resolved_period="2026Q2",
+            as_of="2026-07-22",
+            method="explicit_fiscal_quarter",
+            confidence=1.0,
+        ),
+    )
+    assert mapped.resolved_period == "2025Q4"
+    assert mapped.input == "FY2026 Q2"
+    assert mapped.method == "company_fiscal_label"
+
     result = await service.retrieve_multi_period_transcript_evidence(
         "微軟最近幾季的法說會重點分別是什麼？",
         quarters=["FY2026 Q3", "FY2026 Q2"],
@@ -142,8 +155,7 @@ async def test_transcript_mcp_exposes_answer_and_evidence_tools() -> None:
         assert [item["quarter"] for item in multi_data["quarters"]] == ["2026Q2"]
         assert all(item["evidence"] for item in multi_data["quarters"])
         assert all(
-            item["coverage_mode"] == "broad_facet_retrieval"
-            for item in multi_data["quarters"]
+            item["coverage_mode"] == "broad_facet_retrieval" for item in multi_data["quarters"]
         )
         assert all(
             {evidence["period"] for evidence in item["evidence"]} == {item["period"]}

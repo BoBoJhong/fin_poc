@@ -565,6 +565,8 @@ class Neo4jKnowledgeRepository:
                 "captured_at",
                 "content_hash",
                 "data_version",
+                "locator_table",
+                "locator_primary_key",
             ],
             neo4j_database=settings.neo4j_database,
         )
@@ -925,7 +927,12 @@ class Neo4jKnowledgeRepository:
             content=data.get("text", ""),
             score=max(0.0, min(score, 1.0)),
             period=data.get("period"),
-            locator=SourceLocator(page=data.get("page"), paragraph_id=data.get("paragraph_id")),
+            locator=SourceLocator(
+                page=data.get("page"),
+                paragraph_id=data.get("paragraph_id"),
+                table=data.get("locator_table"),
+                primary_key=data.get("locator_primary_key"),
+            ),
             captured_at=data.get("captured_at"),
             content_hash=data.get("content_hash"),
             data_version=data.get("data_version", "unknown"),
@@ -1233,19 +1240,32 @@ def build_knowledge_repository(settings: Settings) -> KnowledgeRepository:
 def build_finance_repository(settings: Settings) -> FinanceRepository:
     if settings.data_mode == "mock":
         return MockFinanceRepository()
-    repositories: list[FinanceRepository] = [SQLiteFinanceRepository(settings)]
-    repositories.extend(
-        build_external_repositories(
-            settings.external_database_config_file,
-            strict=settings.external_database_strict,
+    repositories: list[FinanceRepository] = []
+    if settings.finance_repository_mode in {"sqlite", "hybrid"}:
+        repositories.append(SQLiteFinanceRepository(settings))
+    if settings.finance_repository_mode in {"external", "hybrid"}:
+        repositories.extend(
+            build_external_repositories(
+                settings.external_database_config_file,
+                strict=settings.external_database_strict,
+            )
         )
-    )
-    repositories.extend(
-        build_external_api_repositories(
-            settings.external_api_config_file,
-            strict=settings.external_api_strict,
+    if settings.finance_repository_mode == "external" and not repositories:
+        raise RuntimeError(
+            "FINANCE_REPOSITORY_MODE=external requires at least one enabled, approved "
+            "external database mapping."
         )
-    )
+    if settings.finance_repository_mode == "sqlite":
+        return repositories[0]
+    # External APIs remain an optional supplement in hybrid mode only. Production
+    # DB-only deployments therefore cannot silently fall back to an HTTP provider.
+    if settings.finance_repository_mode == "hybrid":
+        repositories.extend(
+            build_external_api_repositories(
+                settings.external_api_config_file,
+                strict=settings.external_api_strict,
+            )
+        )
     if len(repositories) == 1:
         return repositories[0]
     return CompositeFinanceRepository(

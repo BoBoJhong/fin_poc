@@ -8,6 +8,7 @@ dependencies = [
   "uvicorn[standard]>=0.35",
   "pydantic>=2.11",
   "pydantic-settings>=2.10",
+  "python-dotenv>=1.0,<2",
   "httpx>=0.28",
   "neo4j>=5.28",
   "neo4j-graphrag[ollama]",

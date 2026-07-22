@@ -57,7 +57,9 @@ def create_transcript_mcp(
             "list_earnings_calls before resolving requests such as recent quarters. Use "
             "retrieve_multi_period_earnings_call_evidence for quarter-by-quarter comparison. Use "
             "get_earnings_call_transcript when the user asks to read the latest or a specific "
-            "call; it returns ordered speaker turns instead of vector Top-K. Transcript tools "
+            "call; it returns ordered speaker turns instead of vector Top-K. For several full "
+            "transcripts, list calls first, then invoke get_earnings_call_transcript once per "
+            "quarter and follow each next_cursor until null. Transcript tools "
             "never supplement missing content with financial databases or model memory."
         ),
     )

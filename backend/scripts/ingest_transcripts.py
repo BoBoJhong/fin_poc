@@ -77,9 +77,7 @@ PLAIN_FIELD_PATTERN = re.compile(
     r"^(Speaker|Title|Content|發言人|職稱|內容)\s*[：:]\s*(.*)$",
     re.IGNORECASE,
 )
-PLAIN_TITLED_SPEAKER_PATTERN = re.compile(
-    r"^(.{1,80}?)[（(]([^）)]{1,80})[）)]\s*[：:]\s*(.*)$"
-)
+PLAIN_TITLED_SPEAKER_PATTERN = re.compile(r"^(.{1,80}?)[（(]([^）)]{1,80})[）)]\s*[：:]\s*(.*)$")
 PLAIN_BRACKETED_SPEAKER_PATTERN = re.compile(r"^\[([^]\r\n]{1,80})\]\s*(.*)$")
 PLAIN_SPEAKER_PATTERN = re.compile(r"^([^：:\r\n]{1,80})\s*[：:]\s*(.*)$")
 QA_SECTION_PATTERN = re.compile(
@@ -229,9 +227,7 @@ def split_plain_text_turns(text: str) -> list[dict[str, str]]:
     if not turns:
         raise ValueError("Plain-text transcript adapter found no speaker turns")
 
-    known_titles = {
-        turn["speaker"]: turn["title"] for turn in turns if turn.get("title")
-    }
+    known_titles = {turn["speaker"]: turn["title"] for turn in turns if turn.get("title")}
     for turn in turns:
         known_title = known_titles.get(turn["speaker"])
         if known_title:
@@ -413,7 +409,6 @@ def seed_neo4j(
                     "sequence": sequence,
                     "source_turn_sequence": source_turn_sequence,
                     "part_index": part_index,
-                    "speaker_id": f"{source.co_code}:{turn['speaker'].casefold()}",
                     "speaker_title": turn.get("title")
                     or source.speaker_titles.get(turn["speaker"]),
                     "co_code": source.co_code,
@@ -472,28 +467,8 @@ def seed_neo4j(
     )
     driver.execute_query(
         """
-        MATCH (call:EarningsCall {source_id: $source_id})
-              -[stale:HAS_PARTICIPANT]->(speaker:Speaker)
-        WHERE NOT speaker.speaker_id IN $speaker_ids
-        DELETE stale
-        """,
-        source_id=source.source_id,
-        speaker_ids=list(dict.fromkeys(row["speaker_id"] for row in turn_rows)),
-        database_=database,
-    )
-    driver.execute_query(
-        """
         UNWIND $turns AS item
         MATCH (call:EarningsCall {source_id: item.source_id})
-        MERGE (speaker:Speaker {speaker_id: item.speaker_id})
-          SET speaker.co_code = item.co_code,
-              speaker.name = item.speaker
-        MERGE (call)-[participant:HAS_PARTICIPANT]->(speaker)
-          SET participant.co_code = item.co_code,
-              participant.source_id = item.source_id,
-              participant.period = item.period,
-              participant.title = item.speaker_title,
-              participant.data_version = $data_version
         MERGE (turn:SpeakerTurn {turn_id: item.turn_id})
           SET turn.co_code = item.co_code,
               turn.source_id = item.source_id,
@@ -511,7 +486,6 @@ def seed_neo4j(
               turn.content_hash = item.content_hash,
               turn.data_version = $data_version
         MERGE (call)-[:HAS_TURN]->(turn)
-        MERGE (turn)-[:SPOKEN_BY]->(speaker)
         """,
         turns=turn_rows,
         data_version=source.data_version,
@@ -569,6 +543,22 @@ def seed_neo4j(
     )
 
 
+def remove_legacy_speaker_graph(driver: Any, database: str) -> None:
+    """Remove the former global-person model after speaker snapshots moved to turns."""
+    driver.execute_query(
+        "MATCH ()-[relation:HAS_PARTICIPANT]->() DELETE relation",
+        database_=database,
+    )
+    driver.execute_query(
+        "MATCH ()-[relation:SPOKEN_BY]->() DELETE relation",
+        database_=database,
+    )
+    driver.execute_query(
+        "MATCH (speaker:Speaker) DETACH DELETE speaker",
+        database_=database,
+    )
+
+
 def ingest(source_keys: list[str]) -> dict[str, Any]:
     settings = get_settings()
     sources = [SOURCES[key] for key in source_keys]
@@ -610,6 +600,7 @@ def ingest(source_keys: list[str]) -> dict[str, Any]:
             settings.neo4j_vector_index,
             settings.neo4j_fulltext_index,
         )
+        remove_legacy_speaker_graph(driver, settings.neo4j_database)
         offset = 0
         details = []
         for source, raw, turns, chunks in normalized:

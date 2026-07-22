@@ -44,11 +44,11 @@ behavior set, timeout and rate-limit tests pass. Evidence-only tools do not requ
 Use a database-side read-only account. Credentials belong only in an environment variable.
 
 ```bash
-export TEMP_FINANCE_DATABASE_URL='postgresql+psycopg://readonly:secret@db/finance'
+export INTERNAL_FINANCE_DATABASE_URL='mariadb+pymysql://readonly:secret@db/finance?charset=utf8mb4'
 cd backend
 ../.venv/bin/python -m scripts.discover_database \
-  --url-env TEMP_FINANCE_DATABASE_URL \
-  --database-id finance_db \
+  --url-env INTERNAL_FINANCE_DATABASE_URL \
+  --database-id internal_finance_db \
   --output ../data/local/finance-db-schema.json \
   --config-output ../config/external_databases.local.json
 ```
@@ -58,12 +58,17 @@ metric, value, unit, source and version semantics. Configure:
 
 ```dotenv
 EXTERNAL_DATABASE_CONFIG_PATH=config/external_databases.local.json
-EXTERNAL_DATABASE_STRICT=false
-TEMP_FINANCE_DATABASE_URL=...
+EXTERNAL_DATABASE_STRICT=true
+FINANCE_REPOSITORY_MODE=external
+INTERNAL_FINANCE_DATABASE_URL=...
 ```
 
 The adapter executes reflected, parameter-bound `SELECT` statements only. It never accepts SQL
 from users or models.
+
+For the current internal deployment, keep `narrative_datasets` empty: MariaDB rows are not
+embedded. Only earnings-call transcripts are chunked and embedded in Neo4j. See
+[INTERNAL_DATABASE_QUICKSTART.md](INTERNAL_DATABASE_QUICKSTART.md).
 
 The built-in SQL registry expects long-form facts (`company`, `period`, `metric`, `value`). For a
 wide table where every column is a financial indicator, create a reviewed read-only database view

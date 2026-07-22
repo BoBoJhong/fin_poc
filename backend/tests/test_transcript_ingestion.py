@@ -2,6 +2,7 @@ from scripts.ingest_transcripts import (
     TranscriptSource,
     chunk_turns,
     seed_neo4j,
+    remove_legacy_speaker_graph,
     split_plain_text_turns,
     split_speaker_turns,
     transcript_turns,
@@ -133,7 +134,27 @@ def test_transcript_reingestion_removes_stale_chunks() -> None:
     graph_queries = "\n".join(call[0] for call in driver.calls)
     assert "document:EarningsCall" in graph_queries
     assert "HAS_EARNINGS_CALL" in graph_queries
-    assert "HAS_PARTICIPANT" in graph_queries
     assert "HAS_TURN" in graph_queries
-    assert "SPOKEN_BY" in graph_queries
     assert "CONTAINS_TURN" in graph_queries
+    assert "HAS_PARTICIPANT" not in graph_queries
+    assert "SPOKEN_BY" not in graph_queries
+    turn_call = next(call for call in driver.calls if "MERGE (turn:SpeakerTurn" in call[0])
+    assert turn_call[1]["turns"][0]["speaker"] == "CEO"
+    assert turn_call[1]["turns"][0]["speaker_title"] is None
+
+
+def test_legacy_speaker_graph_cleanup_is_explicit() -> None:
+    class RecordingDriver:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, dict]] = []
+
+        def execute_query(self, query: str, **parameters) -> None:
+            self.calls.append((query, parameters))
+
+    driver = RecordingDriver()
+    remove_legacy_speaker_graph(driver, "neo4j")
+
+    queries = "\n".join(query for query, _ in driver.calls)
+    assert "HAS_PARTICIPANT" in queries
+    assert "SPOKEN_BY" in queries
+    assert "DETACH DELETE speaker" in queries

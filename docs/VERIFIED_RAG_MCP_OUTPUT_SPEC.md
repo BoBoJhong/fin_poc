@@ -5,7 +5,7 @@
 
 - 文件版本：`2.0`
 - 適用專案：`fin_poc`
-- 最後更新：`2026-07-21`
+- 最後更新：`2026-07-23`
 - 核心原則：財務資料與法說會逐字稿分開檢索、分開驗證、分開引用
 - 規格修改方式：[MCP_API_DESIGN_AND_CHANGE_GUIDE.md](MCP_API_DESIGN_AND_CHANGE_GUIDE.md)
 - Runtime Tool Schema 快照：[mcp-tools.json](mcp-tools.json)
@@ -256,6 +256,9 @@ section、locator、source hash 與 URL。指定唯一已知講者時，每筆 `
 `retrieve_multi_period_earnings_call_evidence` 最多處理四季，所有 vector/full-text 檢索均先
 套用單季 filter，回應也依季度分組。重點型查詢分別檢索營運、策略、展望／風險與 Q&A；
 `broad_facet_retrieval` 只代表多面向證據覆蓋，不代表已逐 turn 產生完整摘要。
+所有 transcript 工具先依 `EarningsCall.fiscal_label` 對應 canonical `period`，例如 Microsoft
+`FY2026 Q2` 對應 `2025Q4`。多季完整逐字稿不合併成單次巨型回應；Agent 對每季分別呼叫
+reader，直到各季 `next_cursor` 為 `null`。
 
 若財務工具回傳 `transcript`，或逐字稿工具回傳財務來源，即視為隔離測試失敗。
 
