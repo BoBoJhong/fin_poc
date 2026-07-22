@@ -13,6 +13,7 @@ from app.mcp_auth import build_mcp_auth
 from app.mcp_gateway import MCPGateway
 from app.mcp_contracts import (
     MCP_SCHEMA_VERSION,
+    MCP_TOOL_CONTRACT_VERSION,
     EvidenceToolResponse,
     VerifiedCitation,
     VerifiedRAGResponse,
@@ -40,30 +41,32 @@ def create_rag_mcp(
     resolved_service = service or build_service(resolved_settings)
     server = FastMCP(
         "Verified Financial RAG",
-        version=MCP_SCHEMA_VERSION,
+        version=MCP_TOOL_CONTRACT_VERSION,
         mask_error_details=True,
         strict_input_validation=True,
         auth=build_mcp_auth(resolved_settings),
         instructions=(
             "Use ask_financial_rag for structured financial metrics and SEC filing questions. "
+            "Every tool call must use a self-contained natural-language query containing the "
+            "company name or ticker; rewrite conversational follow-ups before calling. "
             "The tool resolves the company, retrieves only scoped database and filing evidence, "
-            "never earnings-call transcripts, and verifies every cited claim. "
-            "and refuses unsupported answers. Preserve its citations and refusal status; do "
+            "never earnings-call transcripts, verifies every cited claim, and refuses unsupported "
+            "answers. Preserve its citations and refusal status; do "
             "not add financial facts from model memory."
         ),
     )
 
     @server.tool(output_schema=VerifiedRAGResponse.model_json_schema())
-    async def ask_financial_rag(query: str, co_code: str | None = None) -> dict[str, Any]:
+    async def ask_financial_rag(query: str) -> dict[str, Any]:
         """Answer one-company financial questions with verified, traceable RAG evidence.
 
-        Put the company name or ticker and period in `query`. `co_code` is an optional
-        backwards-compatible hint, not a replacement for an explicit company in the query.
+        Put the company name or ticker and period in `query`. Company scope is resolved only
+        from this natural-language input; callers never provide a separate company selector.
         A `refused` status means the caller must not invent or supplement an answer.
         """
         started = time.perf_counter()
         try:
-            result = await resolved_service.answer(query, co_code)
+            result = await resolved_service.answer(query)
         except (EvidenceValidationError, ValueError) as exc:
             return clarification_response(
                 str(exc), (time.perf_counter() - started) * 1000
@@ -120,13 +123,11 @@ def create_rag_mcp(
         return response.model_dump(mode="json")
 
     @server.tool(output_schema=EvidenceToolResponse.model_json_schema())
-    async def retrieve_financial_evidence(
-        query: str, co_code: str | None = None
-    ) -> dict[str, Any]:
+    async def retrieve_financial_evidence(query: str) -> dict[str, Any]:
         """Retrieve validated financial evidence without generating an answer."""
         started = time.perf_counter()
         try:
-            result = await resolved_service.retrieve_evidence(query, co_code)
+            result = await resolved_service.retrieve_evidence(query)
         except (EvidenceValidationError, ValueError) as exc:
             return EvidenceToolResponse(
                 schema_version=MCP_SCHEMA_VERSION,

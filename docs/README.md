@@ -47,6 +47,7 @@
 | [Architecture](../ARCHITECTURE.md) | 元件、資料流與安全邊界的詳細設計 |
 | [HTTP API Reference](API_REFERENCE.md) | REST／SSE Route 細節 |
 | [Embedding and Chunking Research Notes](EMBEDDING_CHUNKING_RESEARCH.md) | 長文件切分、細粒度檢索論文與 parent-child 設計提案 |
+| [Transcript Embedding Operations](TRANSCRIPT_EMBEDDING_OPERATIONS.md) | 目前法說會 parser、Block 算法、Embedding 呼叫、Neo4j upsert、重跑與全量導入限制 |
 | [Neo4j Earnings-Call Graph](NEO4J_EARNINGS_CALL_GRAPH.md) | 法說會、講者、職稱、逐字 turn 與 embedding chunk 的固定圖譜契約 |
 | [Internal Database Quick Start](INTERNAL_DATABASE_QUICKSTART.md) | MariaDB-only 財務、法說會圖譜、接入步驟與小模型 prompts |
 | [Configuration](CONFIGURATION.md) | 環境變數完整清單 |

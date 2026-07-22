@@ -116,6 +116,8 @@ async def test_transcript_mcp_exposes_answer_and_evidence_tools() -> None:
             "retrieve_earnings_call_evidence",
             "retrieve_earnings_call_blocks",
         ]
+        assert all("co_code" not in tool.inputSchema["properties"] for tool in tools)
+        assert all("query" in tool.inputSchema["required"] for tool in tools)
         assert "display" in tools[0].outputSchema["required"]
         assert "earnings_calls" in tools[1].outputSchema["properties"]
         assert "quarters" in tools[2].outputSchema["properties"]

@@ -4,7 +4,8 @@
 > [docs/PROJECT_SPEC.md](docs/PROJECT_SPEC.md) 為入口。
 
 - Product version: `1.0.0`
-- Public MCP schema: `1.1`
+- Public MCP tool input contract: `2.0` (company is resolved from `query` only)
+- Public MCP response schema: `1.1`
 - Architecture principle: source-isolated retrieval, deterministic scope, verifiable evidence
 
 ## System context
@@ -32,6 +33,10 @@ Answer pipeline --> OpenAI-compatible LLM or deterministic Mock mode
 
 Ports 8001 and 8002 are implementation details and must remain private. External Agents integrate
 with 8003 and 8004 only.
+
+Public MCP tools do not accept a separate `co_code` company selector. A conversational Agent must
+rewrite follow-up messages into a self-contained natural-language `query` before invoking a tool;
+the resolver then returns the matched `co_code` in the response for traceability.
 
 ## Request lifecycle
 

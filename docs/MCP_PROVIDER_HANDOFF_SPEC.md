@@ -5,10 +5,11 @@
 
 - Provider product: Verified Financial RAG MCP
 - Product version: `1.0.0`
+- Public Tool input contract: `2.0`
 - Public response schema: `1.1`
 - Transport: MCP Streamable HTTP
-- Document version: `1.0`
-- Last updated: `2026-07-21`
+- Document version: `1.1`
+- Last updated: `2026-07-23`
 
 This is the self-contained integration document to give an external Agent/MCP client team. Replace
 all `<...>` placeholders with deployment values. Send bearer tokens through a secret manager or
@@ -182,19 +183,17 @@ the two retrieval result sets before verification.
 
 ## 6. Input contract
 
-All public tools use the common fields:
+Every public tool requires one common natural-language field:
 
 ```json
 {
-  "query": "Microsoft 最近一季 revenue?",
-  "co_code": "MSFT"
+  "query": "Microsoft 最近一季 revenue?"
 }
 ```
 
 | Field | Type | Required | Meaning |
 |---|---|---:|---|
-| `query` | string | yes | Original natural-language user question containing company and intent |
-| `co_code` | string/null | no | Backward-compatible canonical company-code hint |
+| `query` | string | yes | Self-contained natural-language question containing company and intent |
 
 `get_earnings_call_transcript` additionally accepts `cursor` (default `0`) and `limit` (default
 `20`, maximum `50`). `next_cursor` is passed back unchanged to read the following page.
@@ -208,9 +207,13 @@ then call `get_earnings_call_transcript` separately for every selected quarter a
 cursor until `next_cursor` is `null`. This bounded workflow avoids oversized MCP responses while
 preserving complete ordered content.
 
+The other accepted fields are Tool controls, not company selectors: transcript pagination accepts
+`cursor` and `limit`; multi-period retrieval accepts `quarters` and `limit`.
+
 Input rules:
 
 - Prefer identifying the company naturally in `query`.
+- Public Tool schemas do not accept `co_code`; an extra `co_code` fails strict validation.
 - The service resolves formal names, aliases and stock codes against its Company Master.
 - The service must not create an unknown `co_code`.
 - A body hint must not override an obvious conflicting company in the query.
@@ -218,6 +221,9 @@ Input rules:
   resolved against verified available periods and the company fiscal calendar.
 - One Tool request covers one company. Multi-company questions require clarification or separate
   calls according to the agreed product scope.
+- MCP Tools are stateless. For “那上一季呢？”, the calling Agent uses its dialogue context to send
+  a self-contained query such as “Microsoft 上一季的法說會說了什麼？”. It must not invent a
+  company absent from both the current message and established conversation.
 
 ## 7. Answer response contract
 
@@ -482,6 +488,79 @@ is:
 Use the client application's supported secret-reference mechanism. Do not replace the environment
 reference with a committed plaintext token.
 
+### 13.1 OpenCode configuration
+
+OpenCode supports remote MCP servers in `opencode.json`. Only register the two public services;
+never register internal ports `8001` or `8002`. The current syntax is documented by
+[OpenCode MCP servers](https://dev.opencode.ai/docs/mcp-servers/).
+
+Local development without MCP authentication:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "financial-rag": {
+      "type": "remote",
+      "url": "http://127.0.0.1:8003/mcp",
+      "enabled": true,
+      "oauth": false
+    },
+    "earnings-call": {
+      "type": "remote",
+      "url": "http://127.0.0.1:8004/mcp",
+      "enabled": true,
+      "oauth": false
+    }
+  }
+}
+```
+
+Private deployment using this project's static bearer-token mode:
+
+```bash
+export VERIFIED_RAG_MCP_TOKEN='<token-from-secure-channel>'
+```
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "financial-rag": {
+      "type": "remote",
+      "url": "https://<host>/<financial-mcp-path>",
+      "enabled": true,
+      "oauth": false,
+      "headers": {
+        "Authorization": "Bearer {env:VERIFIED_RAG_MCP_TOKEN}"
+      }
+    },
+    "earnings-call": {
+      "type": "remote",
+      "url": "https://<host>/<transcript-mcp-path>",
+      "enabled": true,
+      "oauth": false,
+      "headers": {
+        "Authorization": "Bearer {env:VERIFIED_RAG_MCP_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+Verification commands:
+
+```bash
+opencode mcp list
+opencode mcp debug financial-rag
+opencode mcp debug earnings-call
+```
+
+OpenCode registers MCP tools with the configured server name as a prefix. Keep only the MCPs needed
+by the Agent enabled so tool descriptions do not consume unnecessary model context. If OpenCode is
+running in a container or on another host, replace `127.0.0.1` with a reachable private HTTPS
+endpoint.
+
 ## 14. Availability and retry
 
 | Condition | Caller behavior |
@@ -499,6 +578,7 @@ responses for support and audit.
 ## 15. Versioning
 
 - Current public schema is `1.1`.
+- Current public Tool input contract is `2.0`; company scope is query-only.
 - Clients must validate `schema_version`.
 - Additive optional fields may use a minor update.
 - Required-field, type, status-semantic, citation or source-allowlist changes are breaking.
@@ -538,3 +618,67 @@ Before handing over a deployment, the provider supplies:
 Current local evidence and regression coverage is documented in
 [`PRODUCT_READINESS.md`](PRODUCT_READINESS.md). A production deployment must replace local URLs,
 Mock LLM state and deployment-specific IAM/SLA placeholders before external handoff.
+
+## 18. Provider-side embedding A/B policy
+
+Embedding selection is an internal provider decision and does not change public MCP inputs or
+outputs. MCP callers must not send model names, vectors, dimensions or provider credentials.
+
+The current runtime uses Ollama `/api/embed` with `qwen3-embedding:0.6b`. An API Gateway embedding
+provider requires a separate adapter before it can be evaluated. Record its endpoint contract,
+authentication header, model identifier, dimensions, batch limit, rate limit and normalization
+behavior without exposing credentials in evaluation artifacts.
+
+### 18.1 Fair comparison layout
+
+Use identical transcript text and chunk boundaries. Store both vectors on the same `Chunk` so the
+experiment does not duplicate or alter source content:
+
+```text
+Chunk
+├─ embedding_local
+└─ embedding_gateway
+```
+
+Create independent indexes, for example:
+
+```text
+chunk_embedding_local_v1
+chunk_embedding_gateway_v1
+```
+
+Document and query vectors in one evaluation arm must come from the same embedding model. Never
+combine Gateway document vectors with local-model query vectors or the reverse.
+
+### 18.2 Evaluation order and metrics
+
+First compare retrieval without an answer LLM. Use the same Golden Set, `co_code`, period filters,
+speaker filters, `top_k` and reranking settings for both arms. Measure:
+
+| Metric | Requirement |
+|---|---|
+| Recall@5 / Hit@5 | Correct source passage appears in the first five results |
+| MRR@10 | Correct passages rank near the top |
+| Company and period isolation | Must remain 100% |
+| Speaker match rate | Named-speaker queries retrieve the correct turns |
+| p50 / p95 latency | Measured separately for ingestion and query embedding |
+| Error rate | Timeout, rate-limit, invalid-vector and empty-response rate |
+| Cost and throughput | Gateway cost plus documents/queries per second |
+| Vector dimensions/storage | Neo4j index size and memory impact |
+
+The benchmark must include Chinese and English queries, explicit speakers, long and short
+questions, multiple periods, multi-part questions and unsupported/negative cases. Only after the
+retrieval comparison passes should both arms use the same answer LLM for end-to-end verified-answer
+evaluation.
+
+### 18.3 Selection and rollout
+
+- Do not accept a model that reduces company/period isolation or provenance correctness.
+- Prefer retrieval quality first; use latency and cost to choose between statistically similar
+  candidates.
+- Save an experiment manifest containing provider, model/version, dimensions, chunk configuration,
+  index name, dataset version, evaluation date and measured results.
+- Roll out through a new index name. Keep the previous index available for rollback until the new
+  model passes live smoke tests.
+- Re-embed all transcript chunks when the selected document model changes; changing only query
+  embeddings is invalid.

@@ -13,6 +13,7 @@ from app.mcp_auth import build_mcp_auth
 from app.mcp_gateway import MCPGateway
 from app.mcp_contracts import (
     MCP_SCHEMA_VERSION,
+    MCP_TOOL_CONTRACT_VERSION,
     EarningsCallListResponse,
     EvidenceToolResponse,
     MultiPeriodEarningsCallGroup,
@@ -48,11 +49,13 @@ def create_transcript_mcp(
     resolved_service = service or build_service(resolved_settings)
     server = FastMCP(
         "Verified Earnings Call RAG",
-        version=MCP_SCHEMA_VERSION,
+        version=MCP_TOOL_CONTRACT_VERSION,
         mask_error_details=True,
         strict_input_validation=True,
         auth=build_mcp_auth(resolved_settings),
         instructions=(
+            "Every tool call must use a self-contained natural-language query containing the "
+            "company name or ticker; rewrite conversational follow-ups before calling. "
             "Use ask_earnings_call for questions that require a supported answer. Use "
             "list_earnings_calls before resolving requests such as recent quarters. Use "
             "retrieve_multi_period_earnings_call_evidence for quarter-by-quarter comparison. Use "
@@ -65,11 +68,11 @@ def create_transcript_mcp(
     )
 
     @server.tool(output_schema=VerifiedRAGResponse.model_json_schema())
-    async def ask_earnings_call(query: str, co_code: str | None = None) -> dict[str, Any]:
+    async def ask_earnings_call(query: str) -> dict[str, Any]:
         """Answer one-company earnings-call questions using transcript evidence only."""
         started = time.perf_counter()
         try:
-            result = await resolved_service.answer(query, co_code)
+            result = await resolved_service.answer(query)
         except (EvidenceValidationError, ValueError) as exc:
             return clarification_response(
                 str(exc), (time.perf_counter() - started) * 1000
@@ -126,12 +129,10 @@ def create_transcript_mcp(
         return response.model_dump(mode="json")
 
     @server.tool(output_schema=EarningsCallListResponse.model_json_schema())
-    async def list_earnings_calls(
-        query: str, co_code: str | None = None, limit: int = 10
-    ) -> dict[str, Any]:
+    async def list_earnings_calls(query: str, limit: int = 10) -> dict[str, Any]:
         """List available calls so an agent never guesses what recent quarters means."""
         try:
-            result = await resolved_service.list_earnings_calls(query, co_code, limit)
+            result = await resolved_service.list_earnings_calls(query, limit=limit)
         except (EvidenceValidationError, ValueError) as exc:
             return EarningsCallListResponse(
                 status="needs_clarification",
@@ -148,7 +149,6 @@ def create_transcript_mcp(
     @server.tool(output_schema=MultiPeriodEarningsCallResponse.model_json_schema())
     async def retrieve_multi_period_earnings_call_evidence(
         query: str,
-        co_code: str | None = None,
         quarters: list[str] | None = None,
         limit: int = 3,
     ) -> dict[str, Any]:
@@ -156,9 +156,8 @@ def create_transcript_mcp(
         try:
             result = await resolved_service.retrieve_multi_period_transcript_evidence(
                 query,
-                co_code,
-                quarters,
-                limit,
+                quarters=quarters,
+                limit=limit,
             )
         except (EvidenceValidationError, ValueError) as exc:
             return MultiPeriodEarningsCallResponse(
@@ -191,7 +190,6 @@ def create_transcript_mcp(
     @server.tool(output_schema=TranscriptConversationResponse.model_json_schema())
     async def get_earnings_call_transcript(
         query: str,
-        co_code: str | None = None,
         cursor: int = 0,
         limit: int = 20,
     ) -> dict[str, Any]:
@@ -199,7 +197,6 @@ def create_transcript_mcp(
         try:
             result = await resolved_service.retrieve_transcript_conversation(
                 query,
-                co_code,
                 cursor=max(cursor, 0),
                 limit=min(max(limit, 1), 50),
             )
@@ -227,13 +224,11 @@ def create_transcript_mcp(
         return payload
 
     @server.tool(output_schema=EvidenceToolResponse.model_json_schema())
-    async def retrieve_earnings_call_evidence(
-        query: str, co_code: str | None = None
-    ) -> dict[str, Any]:
+    async def retrieve_earnings_call_evidence(query: str) -> dict[str, Any]:
         """Retrieve validated transcript evidence without generating an answer."""
         started = time.perf_counter()
         try:
-            result = await resolved_service.retrieve_evidence(query, co_code)
+            result = await resolved_service.retrieve_evidence(query)
         except (EvidenceValidationError, ValueError) as exc:
             return EvidenceToolResponse(
                 schema_version=MCP_SCHEMA_VERSION,
@@ -265,13 +260,11 @@ def create_transcript_mcp(
         return response.model_dump(mode="json")
 
     @server.tool(output_schema=TranscriptBlockResponse.model_json_schema())
-    async def retrieve_earnings_call_blocks(
-        query: str, co_code: str | None = None
-    ) -> dict[str, Any]:
+    async def retrieve_earnings_call_blocks(query: str) -> dict[str, Any]:
         """Retrieve transcript blocks with nested, attribution-preserving content objects."""
         started = time.perf_counter()
         try:
-            result = await resolved_service.retrieve_evidence(query, co_code)
+            result = await resolved_service.retrieve_evidence(query)
         except (EvidenceValidationError, ValueError) as exc:
             return TranscriptBlockResponse(
                 schema_version=MCP_SCHEMA_VERSION,

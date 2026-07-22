@@ -4,8 +4,8 @@
 > [MCP_PROVIDER_HANDOFF_SPEC.md](MCP_PROVIDER_HANDOFF_SPEC.md)。
 
 - 適用專案：`fin_poc`
-- 文件版本：`1.1`
-- 最後更新：`2026-07-20`
+- 文件版本：`2.0`
+- 最後更新：`2026-07-23`
 - 相關契約：[VERIFIED_RAG_MCP_OUTPUT_SPEC.md](VERIFIED_RAG_MCP_OUTPUT_SPEC.md)
 
 ## 1. 目的
@@ -70,15 +70,16 @@ Tool: ask_earnings_call
 
 ```json
 {
-  "query": "Microsoft FY2026 Q1 管理層如何說明 AI demand？",
-  "co_code": "MSFT"
+  "query": "Microsoft FY2026 Q1 管理層如何說明 AI demand？"
 }
 ```
 
 | 欄位 | 型別 | 必填 | 說明 |
 |---|---|---:|---|
-| `query` | string | 是 | 使用者完整問題，應包含公司與問題意圖 |
-| `co_code` | string | 否 | 股票代碼提示，不能取代問題中的公司資訊 |
+| `query` | string | 是 | 自足的使用者問題，必須包含公司與問題意圖 |
+
+公開 Tool 不接受 `co_code`。Company Resolver 從正式名稱、別名或股票代碼解析；對話追問由
+呼叫端補成自足 query。`cursor`、`limit`、`quarters` 等非公司控制參數可由對應工具保留。
 
 ### 3.2 成功輸出
 
@@ -381,6 +382,8 @@ cd backend
 
 ## 9. 本次實作狀態
 
-針對「標題、發表人、內文、來源內容」需求，目前已採用 `schema_version: 1.1`。頂層 `display` 為 required-but-nullable，並保留既有 `answer`、`citations`、`verification` 與 `data_versions`。
+公開 Tool 輸入契約為 `2.0`：公司只能寫在自然語言 `query`，不再提供 `co_code` 選擇參數。各 Tool 只保留必要的非公司控制參數，例如 `limit`、`cursor` 與 `quarters`。
+
+回應仍採用 `schema_version: 1.1`。頂層 `display` 為 required-but-nullable，並保留既有 `answer`、`citations`、`verification` 與 `data_versions`；回應中的 `co_code` 是 Resolver 結果，用於追溯，不是使用者輸入。
 
 Runtime 已使用 Pydantic 驗證並對外發布 JSON output schema。若未來要改變 `display` 型別、子欄位 required 狀態或狀態語意，必須規劃 major schema／新版工具，不可直接破壞既有工具。

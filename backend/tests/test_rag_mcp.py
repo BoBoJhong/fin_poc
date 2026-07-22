@@ -1,5 +1,6 @@
 import pytest
 from fastmcp import Client
+from fastmcp.exceptions import ToolError
 
 from app.config import Settings
 from mcp_servers.rag import create_rag_mcp
@@ -23,6 +24,11 @@ async def test_public_rag_mcp_exposes_answer_and_evidence_tools() -> None:
             "ask_financial_rag",
             "retrieve_financial_evidence",
         ]
+        assert [set(tool.inputSchema["properties"]) for tool in tools] == [
+            {"query"},
+            {"query"},
+        ]
+        assert all(tool.inputSchema["required"] == ["query"] for tool in tools)
         answer_required = set(tools[0].outputSchema["required"])
         assert {
             "schema_version",
@@ -99,3 +105,13 @@ async def test_public_rag_mcp_makes_refusal_machine_readable() -> None:
         assert data["verification"]["passed"] is False
         assert data["verified"] is False
         assert data["citations"] == []
+
+
+@pytest.mark.asyncio
+async def test_public_rag_mcp_rejects_separate_company_selector() -> None:
+    async with Client(build_test_mcp()) as client:
+        with pytest.raises(ToolError, match="co_code.*unexpected"):
+            await client.call_tool(
+                "ask_financial_rag",
+                {"query": "範例科技 2026 Q2 營收？", "co_code": "DEMO01"},
+            )

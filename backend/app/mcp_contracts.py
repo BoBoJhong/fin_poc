@@ -15,6 +15,7 @@ from app.models import (
 
 
 MCP_SCHEMA_VERSION = "1.1"
+MCP_TOOL_CONTRACT_VERSION = "2.0"
 MCPStatus = Literal["answered", "refused", "needs_clarification"]
 
 

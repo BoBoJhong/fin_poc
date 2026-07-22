@@ -1,7 +1,8 @@
 # Verified Financial RAG MCP 專案規格
 
 - 產品版本：`1.0.0`
-- 公開 MCP Schema：`1.1`
+- 公開 MCP Tool 輸入契約：`2.0`（公司只從 `query` 解析）
+- 公開 MCP Response Schema：`1.1`
 - 最後更新：`2026-07-23`
 
 這是本專案唯一的主要產品與工程規格。產品範圍、架構、啟動、資料接入、部署、可靠度、
@@ -44,7 +45,8 @@ ports `8001`、`8002` 是內部 Knowledge／Finance MCP，不提供給外部 Cli
 - 可切換 SQLite／MariaDB-only／hybrid 財務 repository、Neo4j、核准 SQL DB 與 JSON REST API Adapter。
 - 內部 DB schema catalog 圖譜與公司主檔 mapping；只有法說會原文切塊並 embedding。
 - Qwen `qwen3-embedding:0.6b` 檢索。
-- 公開 MCP Runtime Schema `1.1`。
+- 公開 MCP Tool 輸入契約 `2.0`：對外不接受 `co_code`，公司統一由自然語言 `query` 解析。
+- 公開 MCP Response Schema `1.1`。
 - Evidence-only 模式、併發限制與受控 `503`。
 
 目前本機 Readiness 是 `evidence_only_ready`：Evidence MCP 可用，但正式 `ask_*` 上線前仍需
@@ -146,12 +148,12 @@ make run-api
 
 ```json
 {
-  "query": "Microsoft 最近一季 revenue?",
-  "co_code": null
+  "query": "Microsoft 最近一季 revenue?"
 }
 ```
 
-一般不需傳 `co_code`；服務會從問題解析。Agent 使用答案前必須確認：
+公開 MCP 不接受 `co_code`；服務只從自然語言問題解析公司。對話追問由 Agent 補成包含公司脈絡
+的自足 query。Agent 使用答案前必須確認：
 
 ```text
 status == answered
@@ -299,6 +301,7 @@ cd backend
 | [MCP Schema 變更指南](MCP_API_DESIGN_AND_CHANGE_GUIDE.md) | 修改 Tool／Schema／版本 |
 | [Financial Schema v2](FINANCIAL_DATA_SPEC.md) | 接入或映射財務指標 |
 | [內部資料庫快速接入](INTERNAL_DATABASE_QUICKSTART.md) | 重現專案、串接 MariaDB、匯入法說會與使用小模型 prompts |
+| [法說會 Embedding 與 Block 作業規格](TRANSCRIPT_EMBEDDING_OPERATIONS.md) | 核對 parser、Block 參數、向量呼叫、Neo4j upsert 與全量導入限制 |
 | [外部整合](EXTERNAL_INTEGRATION_GUIDE.md) | 接 LLM、SQL DB、REST API |
 | [新增外部 MCP](ADDING_EXTERNAL_MCP.md) | 接入第三方 MCP |
 | [Deployment](DEPLOYMENT.md) | 正式部署與維運 |

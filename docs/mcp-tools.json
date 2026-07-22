@@ -1,5 +1,6 @@
 {
-  "schema_version": "1.1",
+  "tool_contract_version": "2.0",
+  "response_schema_version": "1.1",
   "servers": [
     {
       "name": "verified_financial_rag",
@@ -7,23 +8,12 @@
       "tools": [
         {
           "name": "ask_financial_rag",
-          "description": "Answer one-company financial questions with verified, traceable RAG evidence.\n\nPut the company name or ticker and period in `query`. `co_code` is an optional\nbackwards-compatible hint, not a replacement for an explicit company in the query.\nA `refused` status means the caller must not invent or supplement an answer.",
+          "description": "Answer one-company financial questions with verified, traceable RAG evidence.\n\nPut the company name or ticker and period in `query`. Company scope is resolved only\nfrom this natural-language input; callers never provide a separate company selector.\nA `refused` status means the caller must not invent or supplement an answer.",
           "inputSchema": {
             "additionalProperties": false,
             "properties": {
               "query": {
                 "type": "string"
-              },
-              "co_code": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null
               }
             },
             "required": [
@@ -646,17 +636,6 @@
             "properties": {
               "query": {
                 "type": "string"
-              },
-              "co_code": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null
               }
             },
             "required": [
@@ -1054,17 +1033,6 @@
             "properties": {
               "query": {
                 "type": "string"
-              },
-              "co_code": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null
               }
             },
             "required": [
@@ -1688,17 +1656,6 @@
               "query": {
                 "type": "string"
               },
-              "co_code": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null
-              },
               "limit": {
                 "default": 10,
                 "type": "integer"
@@ -1804,17 +1761,6 @@
             "properties": {
               "query": {
                 "type": "string"
-              },
-              "co_code": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null
               },
               "quarters": {
                 "anyOf": [
@@ -2136,17 +2082,6 @@
               "query": {
                 "type": "string"
               },
-              "co_code": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null
-              },
               "cursor": {
                 "default": 0,
                 "type": "integer"
@@ -2280,17 +2215,6 @@
             "properties": {
               "query": {
                 "type": "string"
-              },
-              "co_code": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null
               }
             },
             "required": [
@@ -2682,17 +2606,6 @@
             "properties": {
               "query": {
                 "type": "string"
-              },
-              "co_code": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null
               }
             },
             "required": [

@@ -93,6 +93,9 @@ Request:
 `query` is required and must contain 2–4000 characters. `co_code` is an optional hint;
 normal clients should mention the company naturally in `query`.
 
+This optional field is retained only for the legacy HTTP API. Public MCP Tool input contract
+`2.0` does not accept `co_code`; MCP Agents must submit a self-contained natural-language `query`.
+
 ```bash
 curl -X POST http://127.0.0.1:8000/api/v1/chat \
   -H 'Content-Type: application/json' \
