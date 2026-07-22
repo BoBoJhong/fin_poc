@@ -5,7 +5,7 @@
 
 - Product version: `1.0.0`
 - Public MCP tool input contract: `2.0` (company is resolved from `query` only)
-- Public MCP response schema: `1.1`
+- Public MCP response schema: `2.0`
 - Architecture principle: source-isolated retrieval, deterministic scope, verifiable evidence
 
 ## System context
@@ -36,7 +36,7 @@ with 8003 and 8004 only.
 
 Public MCP tools do not accept a separate `co_code` company selector. A conversational Agent must
 rewrite follow-up messages into a self-contained natural-language `query` before invoking a tool;
-the resolver then returns the matched `co_code` in the response for traceability.
+the resolver then returns the matched `company_code` in the public response for traceability.
 
 ## Request lifecycle
 
@@ -78,8 +78,8 @@ Tools:
 - `retrieve_earnings_call_evidence`
 - `retrieve_earnings_call_blocks`
 
-Allowed source: `transcript` only. Speaker, section and source content come directly from citation
-metadata and quoted text. When a natural-language query uniquely names a known speaker, retrieval
+Allowed source: `transcript` only. Speaker and source content come directly from citation metadata
+and source text; internal `section` metadata is not exposed publicly. When a natural-language query uniquely names a known speaker, retrieval
 hard-filters chunks by `speakers` before cosine ranking. The block tool returns nested attribution
 metadata without changing the existing string-based Evidence and citation contracts.
 
@@ -106,7 +106,7 @@ never mixed into a shared Top-K.
 | `Evidence` | Normalized attributable fact or source passage |
 | `SourceLocator` | Table/key/columns, paragraph/page/timestamp or graph path |
 | `SourcePreview` | Recoverable source snapshot or normalized provider record |
-| `VerifiedRAGResponse` | Public answer, citation, verification and status envelope |
+| `VerifiedRAGResponse` | Public compact answer, citation and status envelope |
 | `EvidenceToolResponse` | Evidence-only public response without answer generation |
 | `MetricDefinition` | Stable approved metric semantics and aliases |
 | `ProviderMetricMapping` | Exact provider-key to internal metric mapping |

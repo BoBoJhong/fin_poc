@@ -70,6 +70,7 @@ class PublicMCPChatService:
     async def answer(self, query: str, co_code: str | None = None) -> VerifiedRAGResponse:
         tool_name = self.select_tool(query)
         tools = await self._get_tools()
-        raw = await tools[tool_name].ainvoke({"query": query, "co_code": co_code})
+        tool_query = f"{co_code} {query}" if co_code else query
+        raw = await tools[tool_name].ainvoke({"query": tool_query})
         payload = MCPGateway._coerce_mapping(raw)
         return VerifiedRAGResponse.model_validate(payload)

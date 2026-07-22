@@ -13,8 +13,13 @@ from app.agents import FinancialAgentService
 from app.config import Settings, get_settings
 from app.llm import CompanyLLMClient
 from app.mcp_gateway import MCPGateway
-from app.mcp_contracts import VerifiedCitation, VerifiedRAGResponse, response_confidence
-from app.mcp_contracts import MCP_SCHEMA_VERSION
+from app.http_contracts import (
+    HTTP_SCHEMA_VERSION,
+    HttpCitation,
+    HttpRAGResponse,
+    response_confidence,
+)
+from app.mcp_contracts import VerifiedRAGResponse
 from app.models import ChatRequest, CompanySummary, SourcePreview
 from app.public_mcp_service import PublicMCPChatService
 from app.validation import EvidenceValidationError, EvidenceValidator
@@ -118,7 +123,7 @@ async def readiness(settings: Settings = Depends(get_settings)) -> dict[str, obj
     )
     return {
         "status": "ready" if llm_ready else "evidence_only_ready",
-        "schema_version": MCP_SCHEMA_VERSION,
+        "schema_version": HTTP_SCHEMA_VERSION,
         "data_mode": settings.data_mode,
         "frontend_uses_public_mcp": settings.frontend_use_public_mcp,
         "evidence_tools_ready": True,
@@ -140,7 +145,7 @@ async def run_answer(
     request: ChatRequest,
     tenant: TenantContext,
     service: FinancialAgentService | PublicMCPChatService,
-) -> VerifiedRAGResponse:
+) -> HttpRAGResponse:
     request_code = request.co_code.strip().upper() if request.co_code else None
     if request_code and tenant.co_code and request_code != tenant.co_code:
         raise HTTPException(status_code=403, detail="body 與授權 co_code 不一致")
@@ -149,14 +154,51 @@ async def run_answer(
     except (EvidenceValidationError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if isinstance(result, VerifiedRAGResponse):
-        return result
-    return VerifiedRAGResponse(
-        schema_version=MCP_SCHEMA_VERSION,
+        passed = result.status == "answered" and bool(result.citations)
+        return HttpRAGResponse(
+            schema_version=HTTP_SCHEMA_VERSION,
+            status=result.status,
+            answer=result.answer,
+            co_code=result.company_code,
+            display=None,
+            citations=[
+                HttpCitation(
+                    index=item.index,
+                    evidence_id=f"mcp-{item.source_id}-{item.index}",
+                    co_code=result.company_code or "",
+                    source_id=item.source_id,
+                    title=item.source_id,
+                    source_type=item.source_type,
+                    locator=item.locator,
+                    quoted_text=item.excerpt,
+                    period=item.period,
+                    metadata={"speaker": item.speaker} if item.speaker else {},
+                    live_url=item.source_url,
+                    content_hash=item.content_hash,
+                )
+                for item in result.citations
+            ],
+            routes=[],
+            trace_id=None,
+            verification={"passed": passed, "source": "public_mcp"},
+            verified=passed,
+            confidence=1.0 if passed else 0.0,
+            verification_notes=[],
+            warnings=result.warnings,
+            data_versions=sorted(
+                {item.data_version for item in result.citations if item.data_version}
+            ),
+            latency_ms=0.0,
+            clarification_question=result.clarification_question,
+            period_resolution=None,
+        )
+    return HttpRAGResponse(
+        schema_version=HTTP_SCHEMA_VERSION,
         status="answered" if result.verification.get("passed") is True else "refused",
         answer=result.answer,
         co_code=result.co_code,
         display=None,
-        citations=[VerifiedCitation.model_validate(item.model_dump()) for item in result.citations],
+        citations=[HttpCitation.model_validate(item.model_dump()) for item in result.citations],
         routes=result.routes,
         trace_id=result.trace_id,
         verification=result.verification,
@@ -171,13 +213,13 @@ async def run_answer(
     )
 
 
-@app.post("/api/v1/chat", response_model=VerifiedRAGResponse)
+@app.post("/api/v1/chat", response_model=HttpRAGResponse)
 async def chat(
     request: ChatRequest,
     tenant: TenantContext = Depends(tenant_context),
     service: FinancialAgentService | PublicMCPChatService = Depends(get_agent_service),
     _: None = Depends(concurrency_slot),
-) -> VerifiedRAGResponse:
+) -> HttpRAGResponse:
     return await run_answer(request, tenant, service)
 
 

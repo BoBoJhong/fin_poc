@@ -174,6 +174,9 @@ def build_documents(records: Iterable[NarrativeRecord]) -> list[dict[str, Any]]:
         documents.append(
             {
                 **record.model_dump(),
+                "source_period_json": json.dumps(
+                    record.source_period, ensure_ascii=False, default=str
+                ),
                 "table_id": (
                     f"{record.database_id}:{record.schema_name or 'default'}:{record.table}"
                 ),
@@ -214,7 +217,8 @@ def upsert_narratives(
                   document.upstream_database_id = $database_id,
                   document.upstream_dataset_id = $dataset_id,
                   document.upstream_table = $locator_table,
-                  document.upstream_primary_key = $primary_key
+                  document.upstream_primary_key = $primary_key,
+                  document.source_period = $source_period_json
             MERGE (company)-[:HAS_DOCUMENT]->(document)
             WITH document
             OPTIONAL MATCH (table:DatabaseTable {table_id: $table_id})
@@ -249,7 +253,8 @@ def upsert_narratives(
                       chunk.content_hash = $content_hash,
                       chunk.data_version = $data_version,
                       chunk.locator_table = $locator_table,
-                      chunk.locator_primary_key = $primary_key
+                      chunk.locator_primary_key = $primary_key,
+                      chunk.source_period = $source_period_json
                 MERGE (document)-[:HAS_CHUNK]->(chunk)
                 """,
                 **{key: value for key, value in document.items() if key not in {"chunks", "text"}},

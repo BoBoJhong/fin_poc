@@ -1,6 +1,6 @@
 {
   "tool_contract_version": "2.0",
-  "response_schema_version": "1.1",
+  "response_schema_version": "2.0",
   "servers": [
     {
       "name": "verified_financial_rag",
@@ -24,7 +24,7 @@
           "outputSchema": {
             "properties": {
               "schema_version": {
-                "const": "1.1",
+                "const": "2.0",
                 "title": "Schema Version",
                 "type": "string"
               },
@@ -41,7 +41,7 @@
                 "title": "Answer",
                 "type": "string"
               },
-              "co_code": {
+              "company_code": {
                 "anyOf": [
                   {
                     "type": "string"
@@ -50,202 +50,18 @@
                     "type": "null"
                   }
                 ],
-                "title": "Co Code"
+                "title": "Company Code"
               },
-              "display": {
+              "period": {
                 "anyOf": [
                   {
-                    "properties": {
-                      "title": {
-                        "title": "Title",
-                        "type": "string"
-                      },
-                      "period": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ],
-                        "default": null,
-                        "title": "Period"
-                      },
-                      "speakers": {
-                        "items": {
-                          "type": "string"
-                        },
-                        "title": "Speakers",
-                        "type": "array"
-                      },
-                      "content": {
-                        "title": "Content",
-                        "type": "string"
-                      },
-                      "sources": {
-                        "items": {
-                          "properties": {
-                            "citation_index": {
-                              "title": "Citation Index",
-                              "type": "integer"
-                            },
-                            "speaker": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ],
-                              "default": null,
-                              "title": "Speaker"
-                            },
-                            "section": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ],
-                              "default": null,
-                              "title": "Section"
-                            },
-                            "source_content": {
-                              "title": "Source Content",
-                              "type": "string"
-                            },
-                            "source_url": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ],
-                              "default": null,
-                              "title": "Source Url"
-                            },
-                            "locator": {
-                              "properties": {
-                                "page": {
-                                  "anyOf": [
-                                    {
-                                      "type": "integer"
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ],
-                                  "default": null,
-                                  "title": "Page"
-                                },
-                                "paragraph_id": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ],
-                                  "default": null,
-                                  "title": "Paragraph Id"
-                                },
-                                "timestamp": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ],
-                                  "default": null,
-                                  "title": "Timestamp"
-                                },
-                                "table": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ],
-                                  "default": null,
-                                  "title": "Table"
-                                },
-                                "primary_key": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ],
-                                  "default": null,
-                                  "title": "Primary Key"
-                                },
-                                "columns": {
-                                  "items": {
-                                    "type": "string"
-                                  },
-                                  "title": "Columns",
-                                  "type": "array"
-                                },
-                                "graph_path": {
-                                  "items": {
-                                    "type": "string"
-                                  },
-                                  "title": "Graph Path",
-                                  "type": "array"
-                                }
-                              },
-                              "title": "SourceLocator",
-                              "type": "object"
-                            },
-                            "content_hash": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ],
-                              "default": null,
-                              "title": "Content Hash"
-                            }
-                          },
-                          "required": [
-                            "citation_index",
-                            "source_content",
-                            "locator"
-                          ],
-                          "title": "TranscriptDisplaySource",
-                          "type": "object"
-                        },
-                        "title": "Sources",
-                        "type": "array"
-                      }
-                    },
-                    "required": [
-                      "title",
-                      "content"
-                    ],
-                    "title": "TranscriptDisplay",
-                    "type": "object"
+                    "type": "string"
                   },
                   {
                     "type": "null"
                   }
-                ]
+                ],
+                "title": "Period"
               },
               "citations": {
                 "items": {
@@ -254,25 +70,28 @@
                       "title": "Index",
                       "type": "integer"
                     },
-                    "evidence_id": {
-                      "title": "Evidence Id",
-                      "type": "string"
-                    },
-                    "co_code": {
-                      "title": "Co Code",
-                      "type": "string"
-                    },
                     "source_id": {
                       "title": "Source Id",
-                      "type": "string"
-                    },
-                    "title": {
-                      "title": "Title",
                       "type": "string"
                     },
                     "source_type": {
                       "title": "Source Type",
                       "type": "string"
+                    },
+                    "excerpt": {
+                      "title": "Excerpt",
+                      "type": "string"
+                    },
+                    "period": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Period"
                     },
                     "locator": {
                       "properties": {
@@ -354,11 +173,7 @@
                       "title": "SourceLocator",
                       "type": "object"
                     },
-                    "quoted_text": {
-                      "title": "Quoted Text",
-                      "type": "string"
-                    },
-                    "period": {
+                    "source_url": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -367,25 +182,7 @@
                           "type": "null"
                         }
                       ],
-                      "default": null,
-                      "title": "Period"
-                    },
-                    "metadata": {
-                      "additionalProperties": true,
-                      "title": "Metadata",
-                      "type": "object"
-                    },
-                    "live_url": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ],
-                      "default": null,
-                      "title": "Live Url"
+                      "title": "Source Url"
                     },
                     "content_hash": {
                       "anyOf": [
@@ -396,10 +193,9 @@
                           "type": "null"
                         }
                       ],
-                      "default": null,
                       "title": "Content Hash"
                     },
-                    "captured_at": {
+                    "data_version": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -408,64 +204,36 @@
                           "type": "null"
                         }
                       ],
-                      "default": null,
-                      "title": "Captured At"
+                      "title": "Data Version"
+                    },
+                    "speaker": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Speaker"
                     }
                   },
                   "required": [
                     "index",
-                    "evidence_id",
-                    "co_code",
                     "source_id",
-                    "title",
                     "source_type",
+                    "excerpt",
+                    "period",
                     "locator",
-                    "quoted_text"
+                    "source_url",
+                    "content_hash",
+                    "data_version",
+                    "speaker"
                   ],
-                  "title": "VerifiedCitation",
+                  "title": "PublicCitation",
                   "type": "object"
                 },
                 "title": "Citations",
-                "type": "array"
-              },
-              "routes": {
-                "items": {
-                  "type": "string"
-                },
-                "title": "Routes",
-                "type": "array"
-              },
-              "trace_id": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "title": "Trace Id"
-              },
-              "verification": {
-                "additionalProperties": true,
-                "title": "Verification",
-                "type": "object"
-              },
-              "verified": {
-                "title": "Verified",
-                "type": "boolean"
-              },
-              "confidence": {
-                "maximum": 1,
-                "minimum": 0,
-                "title": "Confidence",
-                "type": "number"
-              },
-              "verification_notes": {
-                "items": {
-                  "type": "string"
-                },
-                "title": "Verification Notes",
                 "type": "array"
               },
               "warnings": {
@@ -474,18 +242,6 @@
                 },
                 "title": "Warnings",
                 "type": "array"
-              },
-              "data_versions": {
-                "items": {
-                  "type": "string"
-                },
-                "title": "Data Versions",
-                "type": "array"
-              },
-              "latency_ms": {
-                "minimum": 0,
-                "title": "Latency Ms",
-                "type": "number"
               },
               "clarification_question": {
                 "anyOf": [
@@ -497,132 +253,17 @@
                   }
                 ],
                 "title": "Clarification Question"
-              },
-              "period_resolution": {
-                "anyOf": [
-                  {
-                    "properties": {
-                      "input": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ],
-                        "default": null,
-                        "title": "Input"
-                      },
-                      "resolved_period": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ],
-                        "default": null,
-                        "title": "Resolved Period"
-                      },
-                      "period_type": {
-                        "default": "fiscal_quarter",
-                        "title": "Period Type",
-                        "type": "string"
-                      },
-                      "as_of": {
-                        "title": "As Of",
-                        "type": "string"
-                      },
-                      "method": {
-                        "title": "Method",
-                        "type": "string"
-                      },
-                      "confidence": {
-                        "maximum": 1,
-                        "minimum": 0,
-                        "title": "Confidence",
-                        "type": "number"
-                      },
-                      "available_periods": {
-                        "items": {
-                          "type": "string"
-                        },
-                        "title": "Available Periods",
-                        "type": "array"
-                      },
-                      "fiscal_calendar": {
-                        "anyOf": [
-                          {
-                            "properties": {
-                              "co_code": {
-                                "title": "Co Code",
-                                "type": "string"
-                              },
-                              "fiscal_year_end_month": {
-                                "maximum": 12,
-                                "minimum": 1,
-                                "title": "Fiscal Year End Month",
-                                "type": "integer"
-                              },
-                              "timezone": {
-                                "default": "UTC",
-                                "title": "Timezone",
-                                "type": "string"
-                              },
-                              "source": {
-                                "default": "company_master",
-                                "title": "Source",
-                                "type": "string"
-                              }
-                            },
-                            "required": [
-                              "co_code",
-                              "fiscal_year_end_month"
-                            ],
-                            "title": "FiscalCalendar",
-                            "type": "object"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ],
-                        "default": null
-                      }
-                    },
-                    "required": [
-                      "as_of",
-                      "method",
-                      "confidence"
-                    ],
-                    "title": "PeriodResolution",
-                    "type": "object"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
               }
             },
             "required": [
               "schema_version",
               "status",
               "answer",
-              "co_code",
-              "display",
+              "company_code",
+              "period",
               "citations",
-              "routes",
-              "trace_id",
-              "verification",
-              "verified",
-              "confidence",
-              "verification_notes",
               "warnings",
-              "data_versions",
-              "latency_ms",
-              "clarification_question",
-              "period_resolution"
+              "clarification_question"
             ],
             "title": "VerifiedRAGResponse",
             "type": "object"
@@ -646,7 +287,7 @@
           "outputSchema": {
             "properties": {
               "schema_version": {
-                "const": "1.1",
+                "const": "2.0",
                 "title": "Schema Version",
                 "type": "string"
               },
@@ -659,7 +300,7 @@
                 "title": "Status",
                 "type": "string"
               },
-              "co_code": {
+              "company_code": {
                 "anyOf": [
                   {
                     "type": "string"
@@ -668,7 +309,7 @@
                     "type": "null"
                   }
                 ],
-                "title": "Co Code"
+                "title": "Company Code"
               },
               "period": {
                 "anyOf": [
@@ -681,30 +322,15 @@
                 ],
                 "title": "Period"
               },
-              "evidence": {
+              "items": {
                 "items": {
                   "properties": {
-                    "evidence_id": {
-                      "title": "Evidence Id",
-                      "type": "string"
-                    },
-                    "co_code": {
-                      "title": "Co Code",
-                      "type": "string"
-                    },
                     "source_id": {
                       "title": "Source Id",
                       "type": "string"
                     },
                     "source_type": {
-                      "enum": [
-                        "financial_report",
-                        "transcript",
-                        "url",
-                        "database",
-                        "graph"
-                      ],
-                      "title": "SourceType",
+                      "title": "Source Type",
                       "type": "string"
                     },
                     "title": {
@@ -730,7 +356,6 @@
                           "type": "null"
                         }
                       ],
-                      "default": null,
                       "title": "Period"
                     },
                     "locator": {
@@ -813,18 +438,6 @@
                       "title": "SourceLocator",
                       "type": "object"
                     },
-                    "captured_at": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ],
-                      "default": null,
-                      "title": "Captured At"
-                    },
                     "content_hash": {
                       "anyOf": [
                         {
@@ -834,43 +447,49 @@
                           "type": "null"
                         }
                       ],
-                      "default": null,
                       "title": "Content Hash"
                     },
                     "data_version": {
-                      "default": "demo-v1",
                       "title": "Data Version",
                       "type": "string"
                     },
-                    "metadata": {
-                      "additionalProperties": true,
-                      "title": "Metadata",
-                      "type": "object"
+                    "speaker": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Speaker"
+                    },
+                    "speakers": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "title": "Speakers",
+                      "type": "array"
                     }
                   },
                   "required": [
-                    "evidence_id",
-                    "co_code",
                     "source_id",
                     "source_type",
                     "title",
                     "content",
-                    "score"
+                    "score",
+                    "period",
+                    "locator",
+                    "content_hash",
+                    "data_version",
+                    "speaker",
+                    "speakers"
                   ],
-                  "title": "Evidence",
+                  "title": "PublicEvidenceItem",
                   "type": "object"
                 },
-                "title": "Evidence",
+                "title": "Items",
                 "type": "array"
-              },
-              "verified": {
-                "title": "Verified",
-                "type": "boolean"
-              },
-              "verification": {
-                "additionalProperties": true,
-                "title": "Verification",
-                "type": "object"
               },
               "warnings": {
                 "items": {
@@ -878,11 +497,6 @@
                 },
                 "title": "Warnings",
                 "type": "array"
-              },
-              "latency_ms": {
-                "minimum": 0,
-                "title": "Latency Ms",
-                "type": "number"
               },
               "clarification_question": {
                 "anyOf": [
@@ -894,126 +508,16 @@
                   }
                 ],
                 "title": "Clarification Question"
-              },
-              "period_resolution": {
-                "anyOf": [
-                  {
-                    "properties": {
-                      "input": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ],
-                        "default": null,
-                        "title": "Input"
-                      },
-                      "resolved_period": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ],
-                        "default": null,
-                        "title": "Resolved Period"
-                      },
-                      "period_type": {
-                        "default": "fiscal_quarter",
-                        "title": "Period Type",
-                        "type": "string"
-                      },
-                      "as_of": {
-                        "title": "As Of",
-                        "type": "string"
-                      },
-                      "method": {
-                        "title": "Method",
-                        "type": "string"
-                      },
-                      "confidence": {
-                        "maximum": 1,
-                        "minimum": 0,
-                        "title": "Confidence",
-                        "type": "number"
-                      },
-                      "available_periods": {
-                        "items": {
-                          "type": "string"
-                        },
-                        "title": "Available Periods",
-                        "type": "array"
-                      },
-                      "fiscal_calendar": {
-                        "anyOf": [
-                          {
-                            "properties": {
-                              "co_code": {
-                                "title": "Co Code",
-                                "type": "string"
-                              },
-                              "fiscal_year_end_month": {
-                                "maximum": 12,
-                                "minimum": 1,
-                                "title": "Fiscal Year End Month",
-                                "type": "integer"
-                              },
-                              "timezone": {
-                                "default": "UTC",
-                                "title": "Timezone",
-                                "type": "string"
-                              },
-                              "source": {
-                                "default": "company_master",
-                                "title": "Source",
-                                "type": "string"
-                              }
-                            },
-                            "required": [
-                              "co_code",
-                              "fiscal_year_end_month"
-                            ],
-                            "title": "FiscalCalendar",
-                            "type": "object"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ],
-                        "default": null
-                      }
-                    },
-                    "required": [
-                      "as_of",
-                      "method",
-                      "confidence"
-                    ],
-                    "title": "PeriodResolution",
-                    "type": "object"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
               }
             },
             "required": [
               "schema_version",
               "status",
-              "co_code",
+              "company_code",
               "period",
-              "evidence",
-              "verified",
-              "verification",
+              "items",
               "warnings",
-              "latency_ms",
-              "clarification_question",
-              "period_resolution"
+              "clarification_question"
             ],
             "title": "EvidenceToolResponse",
             "type": "object"
@@ -1043,7 +547,7 @@
           "outputSchema": {
             "properties": {
               "schema_version": {
-                "const": "1.1",
+                "const": "2.0",
                 "title": "Schema Version",
                 "type": "string"
               },
@@ -1060,7 +564,7 @@
                 "title": "Answer",
                 "type": "string"
               },
-              "co_code": {
+              "company_code": {
                 "anyOf": [
                   {
                     "type": "string"
@@ -1069,202 +573,18 @@
                     "type": "null"
                   }
                 ],
-                "title": "Co Code"
+                "title": "Company Code"
               },
-              "display": {
+              "period": {
                 "anyOf": [
                   {
-                    "properties": {
-                      "title": {
-                        "title": "Title",
-                        "type": "string"
-                      },
-                      "period": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ],
-                        "default": null,
-                        "title": "Period"
-                      },
-                      "speakers": {
-                        "items": {
-                          "type": "string"
-                        },
-                        "title": "Speakers",
-                        "type": "array"
-                      },
-                      "content": {
-                        "title": "Content",
-                        "type": "string"
-                      },
-                      "sources": {
-                        "items": {
-                          "properties": {
-                            "citation_index": {
-                              "title": "Citation Index",
-                              "type": "integer"
-                            },
-                            "speaker": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ],
-                              "default": null,
-                              "title": "Speaker"
-                            },
-                            "section": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ],
-                              "default": null,
-                              "title": "Section"
-                            },
-                            "source_content": {
-                              "title": "Source Content",
-                              "type": "string"
-                            },
-                            "source_url": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ],
-                              "default": null,
-                              "title": "Source Url"
-                            },
-                            "locator": {
-                              "properties": {
-                                "page": {
-                                  "anyOf": [
-                                    {
-                                      "type": "integer"
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ],
-                                  "default": null,
-                                  "title": "Page"
-                                },
-                                "paragraph_id": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ],
-                                  "default": null,
-                                  "title": "Paragraph Id"
-                                },
-                                "timestamp": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ],
-                                  "default": null,
-                                  "title": "Timestamp"
-                                },
-                                "table": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ],
-                                  "default": null,
-                                  "title": "Table"
-                                },
-                                "primary_key": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ],
-                                  "default": null,
-                                  "title": "Primary Key"
-                                },
-                                "columns": {
-                                  "items": {
-                                    "type": "string"
-                                  },
-                                  "title": "Columns",
-                                  "type": "array"
-                                },
-                                "graph_path": {
-                                  "items": {
-                                    "type": "string"
-                                  },
-                                  "title": "Graph Path",
-                                  "type": "array"
-                                }
-                              },
-                              "title": "SourceLocator",
-                              "type": "object"
-                            },
-                            "content_hash": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ],
-                              "default": null,
-                              "title": "Content Hash"
-                            }
-                          },
-                          "required": [
-                            "citation_index",
-                            "source_content",
-                            "locator"
-                          ],
-                          "title": "TranscriptDisplaySource",
-                          "type": "object"
-                        },
-                        "title": "Sources",
-                        "type": "array"
-                      }
-                    },
-                    "required": [
-                      "title",
-                      "content"
-                    ],
-                    "title": "TranscriptDisplay",
-                    "type": "object"
+                    "type": "string"
                   },
                   {
                     "type": "null"
                   }
-                ]
+                ],
+                "title": "Period"
               },
               "citations": {
                 "items": {
@@ -1273,25 +593,28 @@
                       "title": "Index",
                       "type": "integer"
                     },
-                    "evidence_id": {
-                      "title": "Evidence Id",
-                      "type": "string"
-                    },
-                    "co_code": {
-                      "title": "Co Code",
-                      "type": "string"
-                    },
                     "source_id": {
                       "title": "Source Id",
-                      "type": "string"
-                    },
-                    "title": {
-                      "title": "Title",
                       "type": "string"
                     },
                     "source_type": {
                       "title": "Source Type",
                       "type": "string"
+                    },
+                    "excerpt": {
+                      "title": "Excerpt",
+                      "type": "string"
+                    },
+                    "period": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Period"
                     },
                     "locator": {
                       "properties": {
@@ -1373,11 +696,7 @@
                       "title": "SourceLocator",
                       "type": "object"
                     },
-                    "quoted_text": {
-                      "title": "Quoted Text",
-                      "type": "string"
-                    },
-                    "period": {
+                    "source_url": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -1386,25 +705,7 @@
                           "type": "null"
                         }
                       ],
-                      "default": null,
-                      "title": "Period"
-                    },
-                    "metadata": {
-                      "additionalProperties": true,
-                      "title": "Metadata",
-                      "type": "object"
-                    },
-                    "live_url": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ],
-                      "default": null,
-                      "title": "Live Url"
+                      "title": "Source Url"
                     },
                     "content_hash": {
                       "anyOf": [
@@ -1415,10 +716,9 @@
                           "type": "null"
                         }
                       ],
-                      "default": null,
                       "title": "Content Hash"
                     },
-                    "captured_at": {
+                    "data_version": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -1427,64 +727,36 @@
                           "type": "null"
                         }
                       ],
-                      "default": null,
-                      "title": "Captured At"
+                      "title": "Data Version"
+                    },
+                    "speaker": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Speaker"
                     }
                   },
                   "required": [
                     "index",
-                    "evidence_id",
-                    "co_code",
                     "source_id",
-                    "title",
                     "source_type",
+                    "excerpt",
+                    "period",
                     "locator",
-                    "quoted_text"
+                    "source_url",
+                    "content_hash",
+                    "data_version",
+                    "speaker"
                   ],
-                  "title": "VerifiedCitation",
+                  "title": "PublicCitation",
                   "type": "object"
                 },
                 "title": "Citations",
-                "type": "array"
-              },
-              "routes": {
-                "items": {
-                  "type": "string"
-                },
-                "title": "Routes",
-                "type": "array"
-              },
-              "trace_id": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "title": "Trace Id"
-              },
-              "verification": {
-                "additionalProperties": true,
-                "title": "Verification",
-                "type": "object"
-              },
-              "verified": {
-                "title": "Verified",
-                "type": "boolean"
-              },
-              "confidence": {
-                "maximum": 1,
-                "minimum": 0,
-                "title": "Confidence",
-                "type": "number"
-              },
-              "verification_notes": {
-                "items": {
-                  "type": "string"
-                },
-                "title": "Verification Notes",
                 "type": "array"
               },
               "warnings": {
@@ -1493,18 +765,6 @@
                 },
                 "title": "Warnings",
                 "type": "array"
-              },
-              "data_versions": {
-                "items": {
-                  "type": "string"
-                },
-                "title": "Data Versions",
-                "type": "array"
-              },
-              "latency_ms": {
-                "minimum": 0,
-                "title": "Latency Ms",
-                "type": "number"
               },
               "clarification_question": {
                 "anyOf": [
@@ -1516,132 +776,17 @@
                   }
                 ],
                 "title": "Clarification Question"
-              },
-              "period_resolution": {
-                "anyOf": [
-                  {
-                    "properties": {
-                      "input": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ],
-                        "default": null,
-                        "title": "Input"
-                      },
-                      "resolved_period": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ],
-                        "default": null,
-                        "title": "Resolved Period"
-                      },
-                      "period_type": {
-                        "default": "fiscal_quarter",
-                        "title": "Period Type",
-                        "type": "string"
-                      },
-                      "as_of": {
-                        "title": "As Of",
-                        "type": "string"
-                      },
-                      "method": {
-                        "title": "Method",
-                        "type": "string"
-                      },
-                      "confidence": {
-                        "maximum": 1,
-                        "minimum": 0,
-                        "title": "Confidence",
-                        "type": "number"
-                      },
-                      "available_periods": {
-                        "items": {
-                          "type": "string"
-                        },
-                        "title": "Available Periods",
-                        "type": "array"
-                      },
-                      "fiscal_calendar": {
-                        "anyOf": [
-                          {
-                            "properties": {
-                              "co_code": {
-                                "title": "Co Code",
-                                "type": "string"
-                              },
-                              "fiscal_year_end_month": {
-                                "maximum": 12,
-                                "minimum": 1,
-                                "title": "Fiscal Year End Month",
-                                "type": "integer"
-                              },
-                              "timezone": {
-                                "default": "UTC",
-                                "title": "Timezone",
-                                "type": "string"
-                              },
-                              "source": {
-                                "default": "company_master",
-                                "title": "Source",
-                                "type": "string"
-                              }
-                            },
-                            "required": [
-                              "co_code",
-                              "fiscal_year_end_month"
-                            ],
-                            "title": "FiscalCalendar",
-                            "type": "object"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ],
-                        "default": null
-                      }
-                    },
-                    "required": [
-                      "as_of",
-                      "method",
-                      "confidence"
-                    ],
-                    "title": "PeriodResolution",
-                    "type": "object"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
               }
             },
             "required": [
               "schema_version",
               "status",
               "answer",
-              "co_code",
-              "display",
+              "company_code",
+              "period",
               "citations",
-              "routes",
-              "trace_id",
-              "verification",
-              "verified",
-              "confidence",
-              "verification_notes",
               "warnings",
-              "data_versions",
-              "latency_ms",
-              "clarification_question",
-              "period_resolution"
+              "clarification_question"
             ],
             "title": "VerifiedRAGResponse",
             "type": "object"
@@ -1668,6 +813,11 @@
           },
           "outputSchema": {
             "properties": {
+              "schema_version": {
+                "const": "2.0",
+                "title": "Schema Version",
+                "type": "string"
+              },
               "status": {
                 "enum": [
                   "retrieved",
@@ -1686,16 +836,11 @@
                     "type": "null"
                   }
                 ],
-                "default": null,
                 "title": "Company Code"
               },
               "earnings_calls": {
                 "items": {
                   "properties": {
-                    "company_code": {
-                      "title": "Company Code",
-                      "type": "string"
-                    },
                     "period": {
                       "title": "Period",
                       "type": "string"
@@ -1713,7 +858,6 @@
                           "type": "null"
                         }
                       ],
-                      "default": null,
                       "title": "Event Date"
                     },
                     "source_id": {
@@ -1722,18 +866,25 @@
                     }
                   },
                   "required": [
-                    "company_code",
                     "period",
                     "quarter",
+                    "event_date",
                     "source_id"
                   ],
-                  "title": "EarningsCallRecord",
+                  "title": "PublicEarningsCall",
                   "type": "object"
                 },
                 "title": "Earnings Calls",
                 "type": "array"
               },
-              "message": {
+              "warnings": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Warnings",
+                "type": "array"
+              },
+              "clarification_question": {
                 "anyOf": [
                   {
                     "type": "string"
@@ -1742,12 +893,16 @@
                     "type": "null"
                   }
                 ],
-                "default": null,
-                "title": "Message"
+                "title": "Clarification Question"
               }
             },
             "required": [
-              "status"
+              "schema_version",
+              "status",
+              "company_code",
+              "earnings_calls",
+              "warnings",
+              "clarification_question"
             ],
             "title": "EarningsCallListResponse",
             "type": "object"
@@ -1788,6 +943,11 @@
           },
           "outputSchema": {
             "properties": {
+              "schema_version": {
+                "const": "2.0",
+                "title": "Schema Version",
+                "type": "string"
+              },
               "status": {
                 "enum": [
                   "retrieved",
@@ -1806,7 +966,6 @@
                     "type": "null"
                   }
                 ],
-                "default": null,
                 "title": "Company Code"
               },
               "quarters": {
@@ -1829,7 +988,6 @@
                           "type": "null"
                         }
                       ],
-                      "default": null,
                       "title": "Event Date"
                     },
                     "source_id": {
@@ -1844,37 +1002,15 @@
                       "title": "Coverage Mode",
                       "type": "string"
                     },
-                    "coverage_queries": {
-                      "items": {
-                        "type": "string"
-                      },
-                      "title": "Coverage Queries",
-                      "type": "array"
-                    },
-                    "evidence": {
+                    "items": {
                       "items": {
                         "properties": {
-                          "evidence_id": {
-                            "title": "Evidence Id",
-                            "type": "string"
-                          },
-                          "co_code": {
-                            "title": "Co Code",
-                            "type": "string"
-                          },
                           "source_id": {
                             "title": "Source Id",
                             "type": "string"
                           },
                           "source_type": {
-                            "enum": [
-                              "financial_report",
-                              "transcript",
-                              "url",
-                              "database",
-                              "graph"
-                            ],
-                            "title": "SourceType",
+                            "title": "Source Type",
                             "type": "string"
                           },
                           "title": {
@@ -1900,7 +1036,6 @@
                                 "type": "null"
                               }
                             ],
-                            "default": null,
                             "title": "Period"
                           },
                           "locator": {
@@ -1983,18 +1118,6 @@
                             "title": "SourceLocator",
                             "type": "object"
                           },
-                          "captured_at": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ],
-                            "default": null,
-                            "title": "Captured At"
-                          },
                           "content_hash": {
                             "anyOf": [
                               {
@@ -2004,41 +1127,58 @@
                                 "type": "null"
                               }
                             ],
-                            "default": null,
                             "title": "Content Hash"
                           },
                           "data_version": {
-                            "default": "demo-v1",
                             "title": "Data Version",
                             "type": "string"
                           },
-                          "metadata": {
-                            "additionalProperties": true,
-                            "title": "Metadata",
-                            "type": "object"
+                          "speaker": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "title": "Speaker"
+                          },
+                          "speakers": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "title": "Speakers",
+                            "type": "array"
                           }
                         },
                         "required": [
-                          "evidence_id",
-                          "co_code",
                           "source_id",
                           "source_type",
                           "title",
                           "content",
-                          "score"
+                          "score",
+                          "period",
+                          "locator",
+                          "content_hash",
+                          "data_version",
+                          "speaker",
+                          "speakers"
                         ],
-                        "title": "Evidence",
+                        "title": "PublicEvidenceItem",
                         "type": "object"
                       },
-                      "title": "Evidence",
+                      "title": "Items",
                       "type": "array"
                     }
                   },
                   "required": [
                     "quarter",
                     "period",
+                    "event_date",
                     "source_id",
-                    "coverage_mode"
+                    "coverage_mode",
+                    "items"
                   ],
                   "title": "MultiPeriodEarningsCallGroup",
                   "type": "object"
@@ -2053,7 +1193,7 @@
                 "title": "Warnings",
                 "type": "array"
               },
-              "message": {
+              "clarification_question": {
                 "anyOf": [
                   {
                     "type": "string"
@@ -2062,12 +1202,16 @@
                     "type": "null"
                   }
                 ],
-                "default": null,
-                "title": "Message"
+                "title": "Clarification Question"
               }
             },
             "required": [
-              "status"
+              "schema_version",
+              "status",
+              "company_code",
+              "quarters",
+              "warnings",
+              "clarification_question"
             ],
             "title": "MultiPeriodEarningsCallResponse",
             "type": "object"
@@ -2098,6 +1242,11 @@
           },
           "outputSchema": {
             "properties": {
+              "schema_version": {
+                "const": "2.0",
+                "title": "Schema Version",
+                "type": "string"
+              },
               "status": {
                 "enum": [
                   "retrieved",
@@ -2116,8 +1265,18 @@
                     "type": "null"
                   }
                 ],
-                "default": null,
                 "title": "Company Code"
+              },
+              "period": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Period"
               },
               "quarter": {
                 "anyOf": [
@@ -2128,7 +1287,6 @@
                     "type": "null"
                   }
                 ],
-                "default": null,
                 "title": "Quarter"
               },
               "conversations": {
@@ -2184,10 +1342,9 @@
                     "type": "null"
                   }
                 ],
-                "default": null,
                 "title": "Next Cursor"
               },
-              "message": {
+              "source_id": {
                 "anyOf": [
                   {
                     "type": "string"
@@ -2196,12 +1353,50 @@
                     "type": "null"
                   }
                 ],
-                "default": null,
-                "title": "Message"
+                "title": "Source Id"
+              },
+              "source_url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Source Url"
+              },
+              "warnings": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Warnings",
+                "type": "array"
+              },
+              "clarification_question": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Clarification Question"
               }
             },
             "required": [
-              "status"
+              "schema_version",
+              "status",
+              "company_code",
+              "period",
+              "quarter",
+              "conversations",
+              "next_cursor",
+              "source_id",
+              "source_url",
+              "warnings",
+              "clarification_question"
             ],
             "title": "TranscriptConversationResponse",
             "type": "object"
@@ -2225,7 +1420,7 @@
           "outputSchema": {
             "properties": {
               "schema_version": {
-                "const": "1.1",
+                "const": "2.0",
                 "title": "Schema Version",
                 "type": "string"
               },
@@ -2238,7 +1433,7 @@
                 "title": "Status",
                 "type": "string"
               },
-              "co_code": {
+              "company_code": {
                 "anyOf": [
                   {
                     "type": "string"
@@ -2247,7 +1442,7 @@
                     "type": "null"
                   }
                 ],
-                "title": "Co Code"
+                "title": "Company Code"
               },
               "period": {
                 "anyOf": [
@@ -2260,30 +1455,15 @@
                 ],
                 "title": "Period"
               },
-              "evidence": {
+              "items": {
                 "items": {
                   "properties": {
-                    "evidence_id": {
-                      "title": "Evidence Id",
-                      "type": "string"
-                    },
-                    "co_code": {
-                      "title": "Co Code",
-                      "type": "string"
-                    },
                     "source_id": {
                       "title": "Source Id",
                       "type": "string"
                     },
                     "source_type": {
-                      "enum": [
-                        "financial_report",
-                        "transcript",
-                        "url",
-                        "database",
-                        "graph"
-                      ],
-                      "title": "SourceType",
+                      "title": "Source Type",
                       "type": "string"
                     },
                     "title": {
@@ -2309,7 +1489,6 @@
                           "type": "null"
                         }
                       ],
-                      "default": null,
                       "title": "Period"
                     },
                     "locator": {
@@ -2392,18 +1571,6 @@
                       "title": "SourceLocator",
                       "type": "object"
                     },
-                    "captured_at": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ],
-                      "default": null,
-                      "title": "Captured At"
-                    },
                     "content_hash": {
                       "anyOf": [
                         {
@@ -2413,43 +1580,49 @@
                           "type": "null"
                         }
                       ],
-                      "default": null,
                       "title": "Content Hash"
                     },
                     "data_version": {
-                      "default": "demo-v1",
                       "title": "Data Version",
                       "type": "string"
                     },
-                    "metadata": {
-                      "additionalProperties": true,
-                      "title": "Metadata",
-                      "type": "object"
+                    "speaker": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Speaker"
+                    },
+                    "speakers": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "title": "Speakers",
+                      "type": "array"
                     }
                   },
                   "required": [
-                    "evidence_id",
-                    "co_code",
                     "source_id",
                     "source_type",
                     "title",
                     "content",
-                    "score"
+                    "score",
+                    "period",
+                    "locator",
+                    "content_hash",
+                    "data_version",
+                    "speaker",
+                    "speakers"
                   ],
-                  "title": "Evidence",
+                  "title": "PublicEvidenceItem",
                   "type": "object"
                 },
-                "title": "Evidence",
+                "title": "Items",
                 "type": "array"
-              },
-              "verified": {
-                "title": "Verified",
-                "type": "boolean"
-              },
-              "verification": {
-                "additionalProperties": true,
-                "title": "Verification",
-                "type": "object"
               },
               "warnings": {
                 "items": {
@@ -2457,11 +1630,6 @@
                 },
                 "title": "Warnings",
                 "type": "array"
-              },
-              "latency_ms": {
-                "minimum": 0,
-                "title": "Latency Ms",
-                "type": "number"
               },
               "clarification_question": {
                 "anyOf": [
@@ -2473,126 +1641,16 @@
                   }
                 ],
                 "title": "Clarification Question"
-              },
-              "period_resolution": {
-                "anyOf": [
-                  {
-                    "properties": {
-                      "input": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ],
-                        "default": null,
-                        "title": "Input"
-                      },
-                      "resolved_period": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ],
-                        "default": null,
-                        "title": "Resolved Period"
-                      },
-                      "period_type": {
-                        "default": "fiscal_quarter",
-                        "title": "Period Type",
-                        "type": "string"
-                      },
-                      "as_of": {
-                        "title": "As Of",
-                        "type": "string"
-                      },
-                      "method": {
-                        "title": "Method",
-                        "type": "string"
-                      },
-                      "confidence": {
-                        "maximum": 1,
-                        "minimum": 0,
-                        "title": "Confidence",
-                        "type": "number"
-                      },
-                      "available_periods": {
-                        "items": {
-                          "type": "string"
-                        },
-                        "title": "Available Periods",
-                        "type": "array"
-                      },
-                      "fiscal_calendar": {
-                        "anyOf": [
-                          {
-                            "properties": {
-                              "co_code": {
-                                "title": "Co Code",
-                                "type": "string"
-                              },
-                              "fiscal_year_end_month": {
-                                "maximum": 12,
-                                "minimum": 1,
-                                "title": "Fiscal Year End Month",
-                                "type": "integer"
-                              },
-                              "timezone": {
-                                "default": "UTC",
-                                "title": "Timezone",
-                                "type": "string"
-                              },
-                              "source": {
-                                "default": "company_master",
-                                "title": "Source",
-                                "type": "string"
-                              }
-                            },
-                            "required": [
-                              "co_code",
-                              "fiscal_year_end_month"
-                            ],
-                            "title": "FiscalCalendar",
-                            "type": "object"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ],
-                        "default": null
-                      }
-                    },
-                    "required": [
-                      "as_of",
-                      "method",
-                      "confidence"
-                    ],
-                    "title": "PeriodResolution",
-                    "type": "object"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
               }
             },
             "required": [
               "schema_version",
               "status",
-              "co_code",
+              "company_code",
               "period",
-              "evidence",
-              "verified",
-              "verification",
+              "items",
               "warnings",
-              "latency_ms",
-              "clarification_question",
-              "period_resolution"
+              "clarification_question"
             ],
             "title": "EvidenceToolResponse",
             "type": "object"
@@ -2616,7 +1674,7 @@
           "outputSchema": {
             "properties": {
               "schema_version": {
-                "const": "1.1",
+                "const": "2.0",
                 "title": "Schema Version",
                 "type": "string"
               },
@@ -2629,7 +1687,7 @@
                 "title": "Status",
                 "type": "string"
               },
-              "co_code": {
+              "company_code": {
                 "anyOf": [
                   {
                     "type": "string"
@@ -2638,7 +1696,7 @@
                     "type": "null"
                   }
                 ],
-                "title": "Co Code"
+                "title": "Company Code"
               },
               "period": {
                 "anyOf": [
@@ -2663,20 +1721,7 @@
                           "type": "null"
                         }
                       ],
-                      "default": null,
                       "title": "Period"
-                    },
-                    "fiscal_label": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ],
-                      "default": null,
-                      "title": "Fiscal Label"
                     },
                     "speaker": {
                       "anyOf": [
@@ -2687,7 +1732,6 @@
                           "type": "null"
                         }
                       ],
-                      "default": null,
                       "title": "Speaker"
                     },
                     "speakers": {
@@ -2709,18 +1753,6 @@
                     },
                     "content": {
                       "properties": {
-                        "section": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ],
-                          "default": null,
-                          "title": "Section"
-                        },
                         "text": {
                           "title": "Text",
                           "type": "string"
@@ -2734,7 +1766,6 @@
                               "type": "null"
                             }
                           ],
-                          "default": null,
                           "title": "Paragraph Id"
                         },
                         "source_id": {
@@ -2750,7 +1781,6 @@
                               "type": "null"
                             }
                           ],
-                          "default": null,
                           "title": "Content Hash"
                         },
                         "source_url": {
@@ -2762,19 +1792,24 @@
                               "type": "null"
                             }
                           ],
-                          "default": null,
                           "title": "Source Url"
                         }
                       },
                       "required": [
                         "text",
-                        "source_id"
+                        "paragraph_id",
+                        "source_id",
+                        "content_hash",
+                        "source_url"
                       ],
                       "title": "TranscriptBlockContent",
                       "type": "object"
                     }
                   },
                   "required": [
+                    "period",
+                    "speaker",
+                    "speakers",
                     "title",
                     "score",
                     "content"
@@ -2785,21 +1820,12 @@
                 "title": "Items",
                 "type": "array"
               },
-              "verified": {
-                "title": "Verified",
-                "type": "boolean"
-              },
               "warnings": {
                 "items": {
                   "type": "string"
                 },
                 "title": "Warnings",
                 "type": "array"
-              },
-              "latency_ms": {
-                "minimum": 0,
-                "title": "Latency Ms",
-                "type": "number"
               },
               "clarification_question": {
                 "anyOf": [
@@ -2810,17 +1836,17 @@
                     "type": "null"
                   }
                 ],
-                "default": null,
                 "title": "Clarification Question"
               }
             },
             "required": [
               "schema_version",
               "status",
-              "co_code",
+              "company_code",
               "period",
-              "verified",
-              "latency_ms"
+              "items",
+              "warnings",
+              "clarification_question"
             ],
             "title": "TranscriptBlockResponse",
             "type": "object"

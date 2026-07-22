@@ -19,7 +19,11 @@
             "company_code": "ticker",
             "company_name": "issuer_name",
             "industry": "sector",
-            "period": "fiscal_period",
+            "period": {
+              "type": "year_quarter",
+              "year_column": "fiscal_year",
+              "quarter_column": "fiscal_quarter"
+            },
             "metric": "metric_name",
             "value": "metric_value",
             "unit": "currency",
@@ -28,7 +32,7 @@
             "source_url": "filing_url",
             "data_version": "revision",
             "updated_at": "loaded_at",
-            "primary_key": ["ticker", "fiscal_period", "metric_name"]
+            "primary_key": ["ticker", "fiscal_year", "fiscal_quarter", "metric_name"]
           },
           "default_unit": "UNKNOWN",
           "default_scope": "external_database",

@@ -2,7 +2,7 @@
 
 - 產品版本：`1.0.0`
 - 公開 MCP Tool 輸入契約：`2.0`（公司只從 `query` 解析）
-- 公開 MCP Response Schema：`1.1`
+- 公開 MCP Response Schema：`2.0`
 - 最後更新：`2026-07-23`
 
 這是本專案唯一的主要產品與工程規格。產品範圍、架構、啟動、資料接入、部署、可靠度、
@@ -46,7 +46,7 @@ ports `8001`、`8002` 是內部 Knowledge／Finance MCP，不提供給外部 Cli
 - 內部 DB schema catalog 圖譜與公司主檔 mapping；只有法說會原文切塊並 embedding。
 - Qwen `qwen3-embedding:0.6b` 檢索。
 - 公開 MCP Tool 輸入契約 `2.0`：對外不接受 `co_code`，公司統一由自然語言 `query` 解析。
-- 公開 MCP Response Schema `1.1`。
+- 公開 MCP Response Schema `2.0`：精簡 Envelope、統一 `company_code`，移除重複的內部診斷欄位。
 - Evidence-only 模式、併發限制與受控 `503`。
 
 目前本機 Readiness 是 `evidence_only_ready`：Evidence MCP 可用，但正式 `ask_*` 上線前仍需
@@ -157,8 +157,6 @@ make run-api
 
 ```text
 status == answered
-verified == true
-verification.passed == true
 citations.length > 0
 ```
 

@@ -119,7 +119,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/VerifiedRAGResponse"
+                  "$ref": "#/components/schemas/HttpRAGResponse"
                 }
               }
             }
@@ -398,6 +398,362 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "HttpCitation": {
+        "properties": {
+          "index": {
+            "type": "integer",
+            "title": "Index"
+          },
+          "evidence_id": {
+            "type": "string",
+            "title": "Evidence Id"
+          },
+          "co_code": {
+            "type": "string",
+            "title": "Co Code"
+          },
+          "source_id": {
+            "type": "string",
+            "title": "Source Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "source_type": {
+            "type": "string",
+            "title": "Source Type"
+          },
+          "locator": {
+            "$ref": "#/components/schemas/SourceLocator"
+          },
+          "quoted_text": {
+            "type": "string",
+            "title": "Quoted Text"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata"
+          },
+          "live_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Url"
+          },
+          "content_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Hash"
+          },
+          "captured_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Captured At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "index",
+          "evidence_id",
+          "co_code",
+          "source_id",
+          "title",
+          "source_type",
+          "locator",
+          "quoted_text"
+        ],
+        "title": "HttpCitation"
+      },
+      "HttpRAGResponse": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "1.1",
+            "title": "Schema Version"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "answered",
+              "refused",
+              "needs_clarification"
+            ],
+            "title": "Status"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "co_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Co Code"
+          },
+          "display": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HttpTranscriptDisplay"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/HttpCitation"
+            },
+            "type": "array",
+            "title": "Citations"
+          },
+          "routes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Routes"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id"
+          },
+          "verification": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Verification"
+          },
+          "verified": {
+            "type": "boolean",
+            "title": "Verified"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          },
+          "verification_notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Verification Notes"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "data_versions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Data Versions"
+          },
+          "latency_ms": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Latency Ms"
+          },
+          "clarification_question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clarification Question"
+          },
+          "period_resolution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PeriodResolution"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "schema_version",
+          "status",
+          "answer",
+          "co_code",
+          "display",
+          "citations",
+          "routes",
+          "trace_id",
+          "verification",
+          "verified",
+          "confidence",
+          "verification_notes",
+          "warnings",
+          "data_versions",
+          "latency_ms",
+          "clarification_question",
+          "period_resolution"
+        ],
+        "title": "HttpRAGResponse"
+      },
+      "HttpTranscriptDisplay": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period"
+          },
+          "speakers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Speakers"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/HttpTranscriptDisplaySource"
+            },
+            "type": "array",
+            "title": "Sources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "content"
+        ],
+        "title": "HttpTranscriptDisplay"
+      },
+      "HttpTranscriptDisplaySource": {
+        "properties": {
+          "citation_index": {
+            "type": "integer",
+            "title": "Citation Index"
+          },
+          "speaker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speaker"
+          },
+          "section": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section"
+          },
+          "source_content": {
+            "type": "string",
+            "title": "Source Content"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "locator": {
+            "$ref": "#/components/schemas/SourceLocator"
+          },
+          "content_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Hash"
+          }
+        },
+        "type": "object",
+        "required": [
+          "citation_index",
+          "source_content",
+          "locator"
+        ],
+        "title": "HttpTranscriptDisplaySource"
+      },
       "PeriodResolution": {
         "properties": {
           "input": {
@@ -662,115 +1018,6 @@
         ],
         "title": "SourceType"
       },
-      "TranscriptDisplay": {
-        "properties": {
-          "title": {
-            "type": "string",
-            "title": "Title"
-          },
-          "period": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Period"
-          },
-          "speakers": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Speakers"
-          },
-          "content": {
-            "type": "string",
-            "title": "Content"
-          },
-          "sources": {
-            "items": {
-              "$ref": "#/components/schemas/TranscriptDisplaySource"
-            },
-            "type": "array",
-            "title": "Sources"
-          }
-        },
-        "type": "object",
-        "required": [
-          "title",
-          "content"
-        ],
-        "title": "TranscriptDisplay"
-      },
-      "TranscriptDisplaySource": {
-        "properties": {
-          "citation_index": {
-            "type": "integer",
-            "title": "Citation Index"
-          },
-          "speaker": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Speaker"
-          },
-          "section": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Section"
-          },
-          "source_content": {
-            "type": "string",
-            "title": "Source Content"
-          },
-          "source_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Url"
-          },
-          "locator": {
-            "$ref": "#/components/schemas/SourceLocator"
-          },
-          "content_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Content Hash"
-          }
-        },
-        "type": "object",
-        "required": [
-          "citation_index",
-          "source_content",
-          "locator"
-        ],
-        "title": "TranscriptDisplaySource"
-      },
       "ValidationError": {
         "properties": {
           "loc": {
@@ -810,253 +1057,6 @@
           "type"
         ],
         "title": "ValidationError"
-      },
-      "VerifiedCitation": {
-        "properties": {
-          "index": {
-            "type": "integer",
-            "title": "Index"
-          },
-          "evidence_id": {
-            "type": "string",
-            "title": "Evidence Id"
-          },
-          "co_code": {
-            "type": "string",
-            "title": "Co Code"
-          },
-          "source_id": {
-            "type": "string",
-            "title": "Source Id"
-          },
-          "title": {
-            "type": "string",
-            "title": "Title"
-          },
-          "source_type": {
-            "type": "string",
-            "title": "Source Type"
-          },
-          "locator": {
-            "$ref": "#/components/schemas/SourceLocator"
-          },
-          "quoted_text": {
-            "type": "string",
-            "title": "Quoted Text"
-          },
-          "period": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Period"
-          },
-          "metadata": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Metadata"
-          },
-          "live_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Live Url"
-          },
-          "content_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Content Hash"
-          },
-          "captured_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Captured At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "index",
-          "evidence_id",
-          "co_code",
-          "source_id",
-          "title",
-          "source_type",
-          "locator",
-          "quoted_text"
-        ],
-        "title": "VerifiedCitation"
-      },
-      "VerifiedRAGResponse": {
-        "properties": {
-          "schema_version": {
-            "type": "string",
-            "const": "1.1",
-            "title": "Schema Version"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "answered",
-              "refused",
-              "needs_clarification"
-            ],
-            "title": "Status"
-          },
-          "answer": {
-            "type": "string",
-            "title": "Answer"
-          },
-          "co_code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Co Code"
-          },
-          "display": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/TranscriptDisplay"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "citations": {
-            "items": {
-              "$ref": "#/components/schemas/VerifiedCitation"
-            },
-            "type": "array",
-            "title": "Citations"
-          },
-          "routes": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Routes"
-          },
-          "trace_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Trace Id"
-          },
-          "verification": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Verification"
-          },
-          "verified": {
-            "type": "boolean",
-            "title": "Verified"
-          },
-          "confidence": {
-            "type": "number",
-            "maximum": 1.0,
-            "minimum": 0.0,
-            "title": "Confidence"
-          },
-          "verification_notes": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Verification Notes"
-          },
-          "warnings": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Warnings"
-          },
-          "data_versions": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Data Versions"
-          },
-          "latency_ms": {
-            "type": "number",
-            "minimum": 0.0,
-            "title": "Latency Ms"
-          },
-          "clarification_question": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Clarification Question"
-          },
-          "period_resolution": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PeriodResolution"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "schema_version",
-          "status",
-          "answer",
-          "co_code",
-          "display",
-          "citations",
-          "routes",
-          "trace_id",
-          "verification",
-          "verified",
-          "confidence",
-          "verification_notes",
-          "warnings",
-          "data_versions",
-          "latency_ms",
-          "clarification_question",
-          "period_resolution"
-        ],
-        "title": "VerifiedRAGResponse"
       }
     }
   }

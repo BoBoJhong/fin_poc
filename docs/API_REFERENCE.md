@@ -4,7 +4,7 @@
 
 - Service: Verified Financial RAG API
 - API version: `1.0.0`
-- MCP response schema: `1.1`
+- HTTP response schema: `1.1`（Public MCP response 另為 `2.0`）
 - Interactive documentation: `/docs`
 - Machine-readable OpenAPI: `/openapi.json`
 - Repository snapshot: [`openapi.json`](openapi.json)
@@ -49,7 +49,7 @@ Important fields:
 | Field | Meaning |
 |---|---|
 | `status` | `ready` or `evidence_only_ready` |
-| `schema_version` | Public MCP envelope version |
+| `schema_version` | Legacy HTTP response version |
 | `frontend_uses_public_mcp` | Whether UI requests traverse ports 8003/8004 |
 | `evidence_tools_ready` | Evidence-only tools are available |
 | `answer_llm_ready` | Production-compatible answer LLM is configured |
@@ -103,8 +103,8 @@ curl -X POST http://127.0.0.1:8000/api/v1/chat \
   -d '{"query":"Microsoft 最近一季 revenue?"}'
 ```
 
-The response follows `VerifiedRAGResponse`. See
-[VERIFIED_RAG_MCP_OUTPUT_SPEC.md](VERIFIED_RAG_MCP_OUTPUT_SPEC.md) for the complete contract.
+The response follows the legacy `HttpRAGResponse 1.1`. Public MCP tools use the smaller 2.0
+contract documented in [VERIFIED_RAG_MCP_OUTPUT_SPEC.md](VERIFIED_RAG_MCP_OUTPUT_SPEC.md).
 
 ### `POST /api/v1/chat/stream`
 
@@ -115,7 +115,7 @@ Event order:
 1. `status` — retrieval started.
 2. `status` — verification completed.
 3. zero or more `token` events.
-4. `result` — complete `VerifiedRAGResponse`; this is the authoritative result.
+4. `result` — complete `HttpRAGResponse`; this is the authoritative result.
 
 ```bash
 curl -N -X POST http://127.0.0.1:8000/api/v1/chat/stream \

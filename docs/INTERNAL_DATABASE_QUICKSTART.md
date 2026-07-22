@@ -60,6 +60,32 @@ cd backend
 哪個欄位」。不同公司的資料庫命名可能不同，因此第一次仍需確認。若公司能提供固定的標準
 View，mapping 只需設定一次。
 
+若內部 DB 將年度與季度分成兩個欄位，不需修改 DB；由 Adapter 組成標準
+`YYYYQn` period：
+
+```json
+{
+  "company_code": "CO_CD",
+  "period": {
+    "type": "year_quarter",
+    "year_column": "FISCAL_YEAR",
+    "quarter_column": "FISCAL_QUARTER"
+  },
+  "metric": "ITEM_CODE",
+  "value": "ITEM_VALUE"
+}
+```
+
+`FISCAL_YEAR=2025` 與 `FISCAL_QUARTER=Q3` 會正規化為 `period=2025Q3`。舊有
+`"period": "FISCAL_PERIOD"` 單欄 Mapping 仍相容。原始欄位名稱與值會保留在
+`source_period`，供 Evidence 追溯與除錯。年度非四位西元年，或季度不是 `Q1`～`Q4`（也接受
+`1`～`4`）時，該資料會被拒絕，不會猜測期間。
+
+公開 MCP 已能將「微軟 2025 Q3 法說會內容」解析為 `MSFT + 2025Q3 +
+transcript`。這只代表查詢範圍可正確建立；要實際回答，Neo4j 必須已匯入
+`co_code=MSFT`、`period=2025Q3`、`source_type=transcript` 的 Chunk。若該季法說會尚未
+匯入，MCP 應回傳 `refused` 或 `needs_clarification`，不可用模型記憶補答。
+
 本專案目前不使用公司資料庫的文字做 embedding，因此保持：
 
 ```json

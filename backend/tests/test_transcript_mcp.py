@@ -118,7 +118,8 @@ async def test_transcript_mcp_exposes_answer_and_evidence_tools() -> None:
         ]
         assert all("co_code" not in tool.inputSchema["properties"] for tool in tools)
         assert all("query" in tool.inputSchema["required"] for tool in tools)
-        assert "display" in tools[0].outputSchema["required"]
+        assert "company_code" in tools[0].outputSchema["required"]
+        assert "display" not in tools[0].outputSchema["properties"]
         assert "earnings_calls" in tools[1].outputSchema["properties"]
         assert "quarters" in tools[2].outputSchema["properties"]
         assert "conversations" in tools[3].outputSchema["properties"]
@@ -128,14 +129,13 @@ async def test_transcript_mcp_exposes_answer_and_evidence_tools() -> None:
         )
         data = result.structured_content
         assert data["status"] == "answered"
-        assert data["schema_version"] == "1.1"
-        assert data["verification"]["passed"] is True
+        assert data["schema_version"] == "2.0"
+        assert data["company_code"] == "DEMO01"
+        assert data["period"] == "2026Q2"
         assert data["citations"]
         assert {item["source_type"] for item in data["citations"]} == {"transcript"}
-        assert data["display"]["title"] == "DEMO01 2026Q2 法說會"
-        assert (
-            data["display"]["sources"][0]["source_content"] == data["citations"][0]["quoted_text"]
-        )
+        assert data["citations"][0]["excerpt"]
+        assert data["citations"][0]["speaker"] == "財務長"
 
         calls = await client.call_tool(
             "list_earnings_calls",
@@ -155,12 +155,12 @@ async def test_transcript_mcp_exposes_answer_and_evidence_tools() -> None:
         multi_data = multi_period.structured_content
         assert multi_data["status"] == "retrieved"
         assert [item["quarter"] for item in multi_data["quarters"]] == ["2026Q2"]
-        assert all(item["evidence"] for item in multi_data["quarters"])
+        assert all(item["items"] for item in multi_data["quarters"])
         assert all(
             item["coverage_mode"] == "broad_facet_retrieval" for item in multi_data["quarters"]
         )
         assert all(
-            {evidence["period"] for evidence in item["evidence"]} == {item["period"]}
+            {evidence["period"] for evidence in item["items"]} == {item["period"]}
             for item in multi_data["quarters"]
         )
 
@@ -188,7 +188,7 @@ async def test_transcript_mcp_exposes_answer_and_evidence_tools() -> None:
         )
         evidence_data = evidence.structured_content
         assert evidence_data["status"] == "retrieved"
-        assert {item["source_type"] for item in evidence_data["evidence"]} == {"transcript"}
+        assert {item["source_type"] for item in evidence_data["items"]} == {"transcript"}
 
         blocks = await client.call_tool(
             "retrieve_earnings_call_blocks",
@@ -196,7 +196,7 @@ async def test_transcript_mcp_exposes_answer_and_evidence_tools() -> None:
         )
         block_data = blocks.structured_content
         assert block_data["status"] == "retrieved"
-        assert block_data["co_code"] == "DEMO01"
+        assert block_data["company_code"] == "DEMO01"
         assert block_data["period"] == "2026Q2"
         assert block_data["items"]
         assert block_data["items"][0]["content"]["text"]

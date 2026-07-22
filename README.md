@@ -11,7 +11,7 @@ Financial／Earnings Call MCP；所有回答都必須通過公司、期間、來
 - Financial Data Schema v2：Raw Payload、Metric Dictionary、Provider Mapping、精確 Financial Facts。
 - Ollama `qwen3-embedding:0.6b` 向量檢索。
 - OpenAI-compatible LLM 答案生成，或不需 LLM 的 Evidence-only 模式。
-- 財務與法說會兩個隔離的公開 MCP；Tool 輸入契約 `2.0` 統一由自然語言 `query` 辨識公司，回應 Schema 為 `1.1`。
+- 財務與法說會兩個隔離的公開 MCP；Tool 與 Response 契約 `2.0` 統一由自然語言 `query` 辨識公司，公開回應統一使用 `company_code`。
 - FastAPI、SSE、來源回查、併發限制、連線池與 backpressure。
 
 本專案的產品、架構、啟動、資料接入、部署與驗收已統整在
@@ -60,7 +60,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/chat \
 ```
 
 使用者不需先選公司。系統會從 Company Master 的正式名稱、Alias 與股票代碼解析
-`co_code`；未知或多義公司會要求補充。相對期間依該公司實際存在且已驗證的期間解析，
+內部 `co_code`，並在公開 MCP 回傳為 `company_code`；未知或多義公司會要求補充。相對期間依該公司實際存在且已驗證的期間解析，
 不以當天日期猜測。
 
 公開 MCP：

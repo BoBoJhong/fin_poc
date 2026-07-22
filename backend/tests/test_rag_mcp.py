@@ -30,38 +30,25 @@ async def test_public_rag_mcp_exposes_answer_and_evidence_tools() -> None:
         ]
         assert all(tool.inputSchema["required"] == ["query"] for tool in tools)
         answer_required = set(tools[0].outputSchema["required"])
-        assert {
+        assert answer_required == {
             "schema_version",
             "status",
             "answer",
-            "co_code",
-            "display",
+            "company_code",
+            "period",
             "citations",
-            "routes",
-            "trace_id",
-            "verification",
-            "verified",
-            "confidence",
-            "verification_notes",
             "warnings",
-            "data_versions",
-            "latency_ms",
             "clarification_question",
-            "period_resolution",
-        } <= answer_required
-        assert {
+        }
+        assert set(tools[1].outputSchema["required"]) == {
             "schema_version",
             "status",
-            "co_code",
+            "company_code",
             "period",
-            "evidence",
-            "verified",
-            "verification",
+            "items",
             "warnings",
-            "latency_ms",
             "clarification_question",
-            "period_resolution",
-        } <= set(tools[1].outputSchema["required"])
+        }
 
         result = await client.call_tool(
             "ask_financial_rag",
@@ -69,10 +56,10 @@ async def test_public_rag_mcp_exposes_answer_and_evidence_tools() -> None:
         )
         data = result.structured_content
         assert result.is_error is False
-        assert data["schema_version"] == "1.1"
+        assert data["schema_version"] == "2.0"
         assert data["status"] == "answered"
-        assert data["co_code"] == "DEMO01"
-        assert data["verification"]["passed"] is True
+        assert data["company_code"] == "DEMO01"
+        assert data["period"] == "2026Q2"
         assert data["citations"]
         assert all(
             item["content_hash"] or item["locator"]["primary_key"]
@@ -85,8 +72,8 @@ async def test_public_rag_mcp_exposes_answer_and_evidence_tools() -> None:
         )
         evidence_data = evidence.structured_content
         assert evidence_data["status"] == "retrieved"
-        assert evidence_data["verified"] is True
-        assert {item["source_type"] for item in evidence_data["evidence"]} <= {
+        assert evidence_data["company_code"] == "DEMO01"
+        assert {item["source_type"] for item in evidence_data["items"]} <= {
             "database",
             "financial_report",
             "url",
@@ -102,9 +89,8 @@ async def test_public_rag_mcp_makes_refusal_machine_readable() -> None:
         )
         data = result.structured_content
         assert data["status"] == "refused"
-        assert data["verification"]["passed"] is False
-        assert data["verified"] is False
         assert data["citations"] == []
+        assert data["warnings"]
 
 
 @pytest.mark.asyncio

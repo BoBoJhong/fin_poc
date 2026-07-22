@@ -66,6 +66,26 @@ INTERNAL_FINANCE_DATABASE_URL=...
 The adapter executes reflected, parameter-bound `SELECT` statements only. It never accepts SQL
 from users or models.
 
+The `period` mapping is backward compatible with either one canonical source column or separate
+year and quarter columns:
+
+```json
+{"period":"fiscal_period"}
+```
+
+```json
+{
+  "period": {
+    "type": "year_quarter",
+    "year_column": "fiscal_year",
+    "quarter_column": "fiscal_quarter"
+  }
+}
+```
+
+The second form normalizes `2025` plus `Q3` to `2025Q3` in application code and preserves the raw
+column names and values as `source_period`. It does not require a database view or schema change.
+
 For the current internal deployment, keep `narrative_datasets` empty: MariaDB rows are not
 embedded. Only earnings-call transcripts are chunked and embedded in Neo4j. See
 [INTERNAL_DATABASE_QUICKSTART.md](INTERNAL_DATABASE_QUICKSTART.md).

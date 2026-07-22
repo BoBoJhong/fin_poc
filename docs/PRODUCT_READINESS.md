@@ -11,7 +11,7 @@
 | 能力 | 狀態 | 驗證方式 |
 |---|---|---|
 | MCP Runtime Output Schema | 已完成 | FastMCP output schema＋Pydantic runtime validation |
-| 法說會 display | 已完成 | title、speaker、content、source content 一致性測試 |
+| 精簡 MCP Response 2.0 | 已完成 | `company_code`、固定狀態、citation 與 nullable 欄位測試 |
 | Evidence-only MCP | 已完成 | 不經答案 LLM，直接回傳 validated evidence |
 | Company Entity Index | 已完成第一版 | exact、alias、ticker boundary、fuzzy candidate、Top-N LLM constraint |
 | Period Resolver | 已完成第一版 | 明確季度、最近一季、上一季、去年同期 |
@@ -29,7 +29,7 @@
 | Financial Data Schema v2 | 已完成 | raw payload、metric dictionary、provider mapping、exact facts、revision history |
 | Dynamic metric-key normalization | 已完成 | nested keys、approval gate、unknown-key quarantine、REST adapter tests |
 | Large metric-set selection | 已完成 | metric code、display name、Alias、provider key deterministic ranking |
-| Backend regression | 已完成 | `85 passed`（2026-07-23） |
+| Backend regression | 已完成 | `94 passed`；另有 1 項 localhost MCP transport test 需在可綁定 socket 的環境執行（2026-07-23） |
 | 精簡法說會圖譜 | 已完成 | 講者與當時職稱保存在 SpeakerTurn，不建立全域 Speaker 節點 |
 
 ## 2. 公司解析保證
@@ -130,7 +130,7 @@ Frontend
   -> internal Knowledge／Finance MCP
 ```
 
-因此 UI 人工測試與外部 Agent 使用相同的公開 MCP Tool。測試按鈕文字仍屬前端靜態設定；回答、display、citations、verification、period resolution 與 data versions 均來自 MCP 回應。
+因此 UI 人工測試與外部 Agent 使用相同的公開 MCP Tool。Public MCP 2.0 回傳精簡的回答、期間、citations 與 warnings；FastAPI adapter 再轉為既有 HTTP 1.1 格式，維持目前 UI 相容。
 
 ## 7. 外部來源與部署
 

@@ -450,9 +450,18 @@ class FinancialAgentService:
                 quoted_text=item.content,
                 period=item.period,
                 metadata={
-                    key: item.metadata[key]
-                    for key in ("speaker", "speakers", "section", "fiscal_label", "event_date")
-                    if item.metadata.get(key) is not None
+                    "data_version": item.data_version,
+                    **{
+                        key: item.metadata[key]
+                        for key in (
+                            "speaker",
+                            "speakers",
+                            "section",
+                            "fiscal_label",
+                            "event_date",
+                        )
+                        if item.metadata.get(key) is not None
+                    },
                 },
             )
             for index, item in enumerate(evidence, start=1)

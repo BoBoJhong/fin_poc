@@ -11,6 +11,7 @@ from app.database_connectors import (
     build_registry_draft,
     discover_database,
     load_external_database_registry,
+    normalize_mapped_period,
     resolve_environment_value,
 )
 from app.config import Settings
@@ -80,6 +81,58 @@ def external_config(*, approved: bool = True) -> ExternalDatabaseConfig:
     )
 
 
+def split_period_config() -> ExternalDatabaseConfig:
+    return ExternalDatabaseConfig.model_validate(
+        {
+            "id": "vendor_db",
+            "url_env": "TEST_VENDOR_DATABASE_URL",
+            "datasets": [
+                {
+                    "id": "split_facts",
+                    "table": "split_period_facts",
+                    "approved": True,
+                    "mapping": {
+                        "company_code": "co_cd",
+                        "period": {
+                            "type": "year_quarter",
+                            "year_column": "fiscal_year",
+                            "quarter_column": "fiscal_quarter",
+                        },
+                        "metric": "metric_code",
+                        "value": "metric_value",
+                        "unit": "unit",
+                        "primary_key": [
+                            "co_cd",
+                            "fiscal_year",
+                            "fiscal_quarter",
+                            "metric_code",
+                        ],
+                    },
+                }
+            ],
+            "narrative_datasets": [
+                {
+                    "id": "split_notes",
+                    "table": "split_period_notes",
+                    "approved": True,
+                    "mapping": {
+                        "company_code": "co_cd",
+                        "period": {
+                            "type": "year_quarter",
+                            "year_column": "fiscal_year",
+                            "quarter_column": "fiscal_quarter",
+                        },
+                        "title": "title",
+                        "text": "body",
+                        "source_id": "note_id",
+                        "primary_key": ["note_id"],
+                    },
+                }
+            ],
+        }
+    )
+
+
 @pytest.fixture
 def vendor_database(tmp_path, monkeypatch):
     path = tmp_path / "vendor.sqlite3"
@@ -135,6 +188,31 @@ def vendor_database(tmp_path, monkeypatch):
             """
         )
         connection.execute(
+            """
+            CREATE TABLE split_period_facts (
+                co_cd TEXT NOT NULL,
+                fiscal_year INTEGER NOT NULL,
+                fiscal_quarter TEXT NOT NULL,
+                metric_code TEXT NOT NULL,
+                metric_value REAL NOT NULL,
+                unit TEXT NOT NULL,
+                PRIMARY KEY (co_cd, fiscal_year, fiscal_quarter, metric_code)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE split_period_notes (
+                note_id TEXT PRIMARY KEY,
+                co_cd TEXT NOT NULL,
+                fiscal_year INTEGER NOT NULL,
+                fiscal_quarter TEXT NOT NULL,
+                title TEXT NOT NULL,
+                body TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute(
             "INSERT INTO management_notes VALUES (?, ?, ?, ?, ?, ?)",
             (
                 "note-1",
@@ -186,6 +264,25 @@ def vendor_database(tmp_path, monkeypatch):
                 ),
             ],
         )
+        connection.executemany(
+            "INSERT INTO split_period_facts VALUES (?, ?, ?, ?, ?, ?)",
+            [
+                ("ACME", 2025, "Q3", "revenue", 300.0, "USD_M"),
+                ("ACME", 2025, "Q4", "revenue", 330.0, "USD_M"),
+                ("OTHER", 2025, "Q3", "revenue", 10.0, "USD_M"),
+            ],
+        )
+        connection.execute(
+            "INSERT INTO split_period_notes VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                "call-2025-q3",
+                "ACME",
+                2025,
+                "Q3",
+                "2025 Q3 earnings call",
+                "Management discussed AI demand and capacity.",
+            ),
+        )
         connection.commit()
     url = f"sqlite+pysqlite:///{path}"
     monkeypatch.setenv("TEST_VENDOR_DATABASE_URL", url)
@@ -218,6 +315,59 @@ async def test_external_database_maps_unknown_schema_to_evidence(vendor_database
     assert calendar is not None
     assert calendar.fiscal_year_end_month == 6
     assert calendar.timezone == "Asia/Taipei"
+
+
+@pytest.mark.asyncio
+async def test_split_year_quarter_columns_are_normalized_and_filtered(vendor_database) -> None:
+    repository = ExternalSQLFinanceRepository(split_period_config())
+
+    evidence = await repository.get_metrics("ACME", "2025Q3")
+    periods = await repository.list_periods("ACME")
+
+    assert len(evidence) == 1
+    assert evidence[0].period == "2025Q3"
+    assert evidence[0].metadata["source_period"] == {
+        "year_column": "fiscal_year",
+        "year_value": 2025,
+        "quarter_column": "fiscal_quarter",
+        "quarter_value": "Q3",
+    }
+    assert "fiscal_year" in evidence[0].locator.columns
+    assert "fiscal_quarter" in evidence[0].locator.columns
+    assert periods == ["2025Q3", "2025Q4"]
+
+
+def test_split_year_quarter_narrative_period_is_normalized(vendor_database) -> None:
+    reader = ExternalSQLNarrativeReader(split_period_config())
+    try:
+        records = reader.read()
+    finally:
+        reader.close()
+
+    assert records[0].period == "2025Q3"
+    assert records[0].source_period["year_value"] == 2025
+    assert records[0].source_period["quarter_value"] == "Q3"
+
+
+@pytest.mark.parametrize(
+    ("year", "quarter", "expected"),
+    [(2025, "Q3", "2025Q3"), ("2025", "q3", "2025Q3"), (2025, 3, "2025Q3")],
+)
+def test_year_quarter_normalizer_accepts_expected_source_values(
+    year, quarter, expected
+) -> None:
+    mapping = split_period_config().datasets[0].mapping.period
+    period, _ = normalize_mapped_period(
+        {"fiscal_year": year, "fiscal_quarter": quarter}, mapping
+    )
+    assert period == expected
+
+
+@pytest.mark.parametrize(("year", "quarter"), [(2025, "Q5"), (2025, ""), (25, "Q1")])
+def test_year_quarter_normalizer_rejects_invalid_source_values(year, quarter) -> None:
+    mapping = split_period_config().datasets[0].mapping.period
+    with pytest.raises(ValueError, match="Invalid fiscal"):
+        normalize_mapped_period({"fiscal_year": year, "fiscal_quarter": quarter}, mapping)
 
 
 def test_approved_narrative_mapping_is_read_with_database_provenance(vendor_database) -> None:
@@ -255,9 +405,26 @@ def test_discovery_suggests_mapping_without_credentials(vendor_database) -> None
     assert all("password" not in json.dumps(item).lower() for item in report["tables"])
 
     draft = build_registry_draft(report, "vendor_db", "TEST_VENDOR_DATABASE_URL")
-    dataset = draft["databases"][0]["datasets"][0]
+    dataset = next(
+        item for item in draft["databases"][0]["datasets"] if item["table"] == "vendor_facts"
+    )
     assert dataset["approved"] is False
     assert dataset["mapping"]["company_code"] == "ticker_symbol"
+
+    split_table = next(
+        item for item in report["tables"] if item["table"] == "split_period_facts"
+    )
+    assert split_table["mapping_suggestion"]["period"] == {
+        "type": "year_quarter",
+        "year_column": "fiscal_year",
+        "quarter_column": "fiscal_quarter",
+    }
+    split_draft = next(
+        item
+        for item in draft["databases"][0]["datasets"]
+        if item["table"] == "split_period_facts"
+    )
+    assert split_draft["mapping"]["period"]["type"] == "year_quarter"
 
     catalog = build_catalog(report, "vendor_db")
     assert any(item["name"] == "vendor_facts" for item in catalog["tables"])

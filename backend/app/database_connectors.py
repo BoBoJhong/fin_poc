@@ -9,11 +9,11 @@ import re
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from dotenv import dotenv_values
-from sqlalchemy import MetaData, Table, and_, create_engine, inspect, select
+from sqlalchemy import MetaData, String, Table, and_, cast, create_engine, func, inspect, select
 from sqlalchemy.engine import Engine
 
 from app.models import (
@@ -42,13 +42,26 @@ def resolve_environment_value(name: str, env_file: Path = PROJECT_ENV_FILE) -> s
     return str(file_value).strip() if file_value is not None else ""
 
 
+class YearQuarterPeriodMapping(BaseModel):
+    """Build one canonical YYYYQn period from separate source columns."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["year_quarter"]
+    year_column: str
+    quarter_column: str
+
+
+PeriodColumnMapping = str | YearQuarterPeriodMapping
+
+
 class MetricColumnMapping(BaseModel):
     """Maps one arbitrary financial fact table to the stable Evidence contract."""
 
     model_config = ConfigDict(extra="forbid")
 
     company_code: str
-    period: str
+    period: PeriodColumnMapping
     metric: str
     value: str
     company_name: str | None = None
@@ -124,7 +137,7 @@ class NarrativeColumnMapping(BaseModel):
     company_code: str
     text: str
     title: str | None = None
-    period: str | None = None
+    period: PeriodColumnMapping | None = None
     source_id: str | None = None
     data_version: str | None = None
     updated_at: str | None = None
@@ -210,12 +223,80 @@ def _canonical_hash(value: dict[str, Any]) -> str:
 
 def _mapped_columns(mapping: BaseModel) -> set[str]:
     columns: set[str] = set()
-    for key, value in mapping.model_dump(exclude_none=True).items():
+    for key in type(mapping).model_fields:
+        value = getattr(mapping, key)
+        if value is None:
+            continue
         if key == "primary_key":
             columns.update(value)
+        elif key == "period":
+            columns.update(_period_columns(value))
         else:
             columns.add(value)
     return columns
+
+
+def _period_columns(mapping: PeriodColumnMapping) -> list[str]:
+    if isinstance(mapping, str):
+        return [mapping]
+    return [mapping.year_column, mapping.quarter_column]
+
+
+def _year_quarter_values(row: dict[str, Any], mapping: YearQuarterPeriodMapping) -> tuple[str, str]:
+    raw_year = row.get(mapping.year_column)
+    raw_quarter = row.get(mapping.quarter_column)
+    year = str(raw_year).strip() if raw_year is not None else ""
+    quarter = str(raw_quarter).strip().upper() if raw_quarter is not None else ""
+    if not re.fullmatch(r"20\d{2}", year):
+        raise ValueError(
+            f"Invalid fiscal year {raw_year!r} from column {mapping.year_column!r}"
+        )
+    match = re.fullmatch(r"Q?0?([1-4])", quarter)
+    if not match:
+        raise ValueError(
+            f"Invalid fiscal quarter {raw_quarter!r} from column {mapping.quarter_column!r}"
+        )
+    return year, match.group(1)
+
+
+def normalize_mapped_period(
+    row: dict[str, Any], mapping: PeriodColumnMapping | None
+) -> tuple[str | None, dict[str, Any]]:
+    """Return a canonical period plus the untouched source-column values."""
+    if mapping is None:
+        return None, {}
+    if isinstance(mapping, str):
+        raw = row.get(mapping)
+        period = str(raw).strip() if raw is not None else ""
+        if not period:
+            raise ValueError(f"Missing period value from column {mapping!r}")
+        return period, {"column": mapping, "value": raw}
+    year, quarter = _year_quarter_values(row, mapping)
+    return f"{year}Q{quarter}", {
+        "year_column": mapping.year_column,
+        "year_value": row.get(mapping.year_column),
+        "quarter_column": mapping.quarter_column,
+        "quarter_value": row.get(mapping.quarter_column),
+    }
+
+
+def _period_sql_filters(
+    table: Table, mapping: PeriodColumnMapping, period: str
+) -> list[Any]:
+    if isinstance(mapping, str):
+        return [table.c[mapping] == period]
+    match = re.fullmatch(r"(20\d{2})Q([1-4])", period.strip().upper())
+    if not match:
+        raise ValueError(
+            f"Composite year-quarter mapping requires a canonical YYYYQn period, got {period!r}"
+        )
+    year, quarter = match.groups()
+    year_value = func.trim(cast(table.c[mapping.year_column], String))
+    quarter_value = func.upper(func.trim(cast(table.c[mapping.quarter_column], String)))
+    return [
+        year_value == year,
+        quarter_value.in_((f"Q{quarter}", quarter, f"0{quarter}")),
+    ]
 
 
 def _parse_aliases(value: Any) -> list[str]:
@@ -246,6 +327,7 @@ class NarrativeRecord(BaseModel):
     title: str
     text: str
     period: str | None = None
+    source_period: dict[str, Any] = Field(default_factory=dict)
     primary_key: str
     captured_at: str | None = None
     content_hash: str
@@ -322,7 +404,7 @@ class ExternalSQLFinanceRepository:
         if raw is None:
             keys = mapping.primary_key or [
                 mapping.company_code,
-                mapping.period,
+                *_period_columns(mapping.period),
                 mapping.metric,
             ]
             raw = "|".join(str(row.get(column, "")) for column in keys)
@@ -333,7 +415,9 @@ class ExternalSQLFinanceRepository:
         row = {key: _json_value(value) for key, value in raw_row.items()}
         mapping = dataset.mapping
         co_code = str(row[mapping.company_code]).strip().upper()
-        period = str(row[mapping.period]).strip()
+        period, source_period = normalize_mapped_period(row, mapping.period)
+        if period is None:
+            raise ValueError(f"Dataset {dataset.id!r} requires a financial period")
         metric = str(row[mapping.metric]).strip()
         value = _json_value(row[mapping.value])
         unit = str(self._value(row, mapping.unit, dataset.default_unit))
@@ -342,15 +426,14 @@ class ExternalSQLFinanceRepository:
         content_hash = _canonical_hash(row)
         version = self._value(row, mapping.data_version) or content_hash
         updated_at = self._value(row, mapping.updated_at)
-        keys = mapping.primary_key or [mapping.company_code, mapping.period, mapping.metric]
+        keys = mapping.primary_key or [
+            mapping.company_code,
+            *_period_columns(mapping.period),
+            mapping.metric,
+        ]
         primary_key = "|".join(str(row.get(column, "")) for column in keys)
         record_digest = hashlib.sha256(primary_key.encode("utf-8")).hexdigest()[:24]
-        mapped_columns: list[str] = []
-        for mapped in mapping.model_dump(exclude_none=True).values():
-            if isinstance(mapped, list):
-                mapped_columns.extend(mapped)
-            else:
-                mapped_columns.append(str(mapped))
+        mapped_columns = sorted(_mapped_columns(mapping))
         evidence = Evidence(
             evidence_id=f"ev-{source_id}-{record_digest}",
             co_code=co_code,
@@ -367,7 +450,7 @@ class ExternalSQLFinanceRepository:
                     else dataset.table
                 ),
                 primary_key=primary_key,
-                columns=sorted(set(mapped_columns)),
+                columns=mapped_columns,
             ),
             captured_at=str(updated_at) if updated_at is not None else None,
             content_hash=content_hash,
@@ -381,6 +464,7 @@ class ExternalSQLFinanceRepository:
                 "scope": scope,
                 "source_url": self._value(row, mapping.source_url),
                 "read_only_adapter": True,
+                "source_period": source_period,
             },
         )
         cache_key = (source_id, co_code)
@@ -470,7 +554,7 @@ class ExternalSQLFinanceRepository:
                     mapping = dataset.mapping
                     filters = [table.c[mapping.company_code] == code]
                     if period is not None:
-                        filters.append(table.c[mapping.period] == period)
+                        filters.extend(_period_sql_filters(table, mapping.period, period))
                     statement = select(table).where(and_(*filters)).limit(dataset.row_limit)
                     rows = connection.execute(statement).mappings()
                     evidence.extend(self._row_to_evidence(dataset, dict(row)) for row in rows)
@@ -595,7 +679,7 @@ class ExternalSQLNarrativeReader:
                     title = row.get(mapping.title) if mapping.title else None
                     version = row.get(mapping.data_version) if mapping.data_version else None
                     captured_at = row.get(mapping.updated_at) if mapping.updated_at else None
-                    period = row.get(mapping.period) if mapping.period else None
+                    period, source_period = normalize_mapped_period(row, mapping.period)
                     records.append(
                         NarrativeRecord(
                             database_id=self.config.id,
@@ -607,11 +691,12 @@ class ExternalSQLNarrativeReader:
                             source_type=dataset.source_type,
                             title=str(title or dataset.default_title),
                             text=text,
-                            period=str(period).strip() if period is not None else None,
+                            period=period,
                             primary_key=primary_key,
                             captured_at=str(captured_at) if captured_at is not None else None,
                             content_hash=content_hash,
                             data_version=str(version or content_hash),
+                            source_period=source_period,
                         )
                     )
         return records
@@ -715,6 +800,7 @@ def discover_database(url: str) -> dict[str, Any]:
     aliases = {
         "company_code": (
             "co_code",
+            "co_cd",
             "company_code",
             "ticker",
             "ticker_symbol",
@@ -730,6 +816,8 @@ def discover_database(url: str) -> dict[str, Any]:
             "quarter",
             "reporting_period",
         ),
+        "year": ("fiscal_year", "report_year", "year"),
+        "quarter": ("fiscal_quarter", "report_quarter", "quarter"),
         "metric": ("metric_code", "metric", "metric_name", "measure_name", "concept"),
         "value": ("value", "metric_value", "measure_value", "amount", "numeric_value"),
         "unit": ("unit", "measure_unit", "currency", "uom"),
@@ -761,6 +849,16 @@ def discover_database(url: str) -> dict[str, Any]:
                     target: next((names[name] for name in candidates if name in names), None)
                     for target, candidates in aliases.items()
                 }
+                if (
+                    suggestion["year"]
+                    and suggestion["quarter"]
+                    and suggestion["period"] in {None, suggestion["quarter"]}
+                ):
+                    suggestion["period"] = {
+                        "type": "year_quarter",
+                        "year_column": suggestion["year"],
+                        "quarter_column": suggestion["quarter"],
+                    }
                 required = ("company_code", "period", "metric", "value")
                 score = sum(bool(suggestion[name]) for name in required)
                 tables.append(
@@ -830,9 +928,15 @@ def build_registry_draft(report: dict[str, Any], database_id: str, url_env: str)
                 for key, value in table["mapping_suggestion"].items()
                 if value is not None and key in MetricColumnMapping.model_fields
             }
+            period_mapping = mapping["period"]
+            period_keys = (
+                [period_mapping]
+                if isinstance(period_mapping, str)
+                else [period_mapping["year_column"], period_mapping["quarter_column"]]
+            )
             mapping["primary_key"] = table.get("primary_key") or [
                 mapping["company_code"],
-                mapping["period"],
+                *period_keys,
                 mapping["metric"],
             ]
             datasets.append(

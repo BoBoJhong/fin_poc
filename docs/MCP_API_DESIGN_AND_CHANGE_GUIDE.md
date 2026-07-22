@@ -1,389 +1,94 @@
 # MCP API 設計與變更指南
 
-> 文件層級：內部 Schema 維護附錄。對外使用規格請見
-> [MCP_PROVIDER_HANDOFF_SPEC.md](MCP_PROVIDER_HANDOFF_SPEC.md)。
-
-- 適用專案：`fin_poc`
-- 文件版本：`2.0`
-- 最後更新：`2026-07-23`
-- 相關契約：[VERIFIED_RAG_MCP_OUTPUT_SPEC.md](VERIFIED_RAG_MCP_OUTPUT_SPEC.md)
-
-## 1. 目的
-
-本文件說明：
-
-1. 如何定義 Financial MCP 與 Earnings Call MCP 的輸入、輸出。
-2. 如何將法說會結果呈現為「標題、發表人、內文、來源內容」。
-3. 未來修改 MCP 規格時，需要變更哪些程式與測試。
-4. 如何判斷修改是否相容，以及何時需要建立新版工具。
-
-MCP 規格由本專案擁有者定義。模型只能依照 Tool Schema 呼叫工具，不應自行改變欄位名稱、狀態語意或引用規則。
-
-## 2. 設計原則
-
-### 2.1 穩定 Envelope 與業務顯示分離
-
-所有 MCP 工具保留共用 Envelope：
-
-```json
-{
-  "schema_version": "1.1",
-  "status": "answered",
-  "answer": "...",
-  "co_code": "MSFT",
-  "citations": [],
-  "verification": {"passed": true},
-  "data_versions": [],
-  "trace_id": "..."
-}
-```
-
-法說會專屬顯示格式放在額外的 `display` 欄位。這樣既有 Agent 仍可讀取 `answer` 與 `citations`，新介面則可直接顯示標題、發表人與來源內容。
-
-### 2.2 Citation 是事實來源
-
-- `answer`／`display.content` 是根據證據產生的回答。
-- `display.sources[].source_content` 必須直接來自 citation 的 `quoted_text`。
-- `speaker` 必須直接來自 citation metadata，不能由模型猜測。
-- `source_url`、`locator`、`content_hash` 必須保留，才能人工核對。
-- `display` 只是呈現層，不能取代 `citations`。
-
-### 2.3 拒答格式必須穩定
-
-`refused` 或 `needs_clarification` 時：
-
-- 不得產生假的 speaker 或 source content。
-- `citations` 必須為空陣列。
-- `display` 可以是 `null`。
-- 呼叫端不得使用模型記憶補答。
-
-## 3. 法說會建議輸出規格
-
-### 3.1 MCP Tool
-
-```text
-Endpoint: http://127.0.0.1:8004/mcp
-Tool: ask_earnings_call
-```
-
-輸入：
-
-```json
-{
-  "query": "Microsoft FY2026 Q1 管理層如何說明 AI demand？"
-}
-```
-
-| 欄位 | 型別 | 必填 | 說明 |
-|---|---|---:|---|
-| `query` | string | 是 | 自足的使用者問題，必須包含公司與問題意圖 |
-
-公開 Tool 不接受 `co_code`。Company Resolver 從正式名稱、別名或股票代碼解析；對話追問由
-呼叫端補成自足 query。`cursor`、`limit`、`quarters` 等非公司控制參數可由對應工具保留。
-
-### 3.2 成功輸出
-
-目前採用以下 schema。為聚焦 display，本段只展示主要欄位；完整 required envelope 以 [VERIFIED_RAG_MCP_OUTPUT_SPEC.md](VERIFIED_RAG_MCP_OUTPUT_SPEC.md) 與 Runtime output schema 為準：
-
-```json
-{
-  "schema_version": "1.1",
-  "status": "answered",
-  "answer": "管理層表示 AI 與雲端需求持續增加……[1]",
-  "co_code": "MSFT",
-  "display": {
-    "title": "MSFT FY2026 Q1 法說會",
-    "period": "FY2026 Q1",
-    "speakers": ["Satya Nadella"],
-    "content": "管理層表示 AI 與雲端需求持續增加……[1]",
-    "sources": [
-      {
-        "citation_index": 1,
-        "speaker": "Satya Nadella",
-        "section": "Prepared Remarks",
-        "source_content": "逐字稿實際原文片段……",
-        "source_url": "https://www.microsoft.com/...",
-        "locator": {
-          "paragraph_id": "paragraph-18"
-        },
-        "content_hash": "sha256:..."
-      }
-    ]
-  },
-  "citations": [
-    {
-      "index": 1,
-      "evidence_id": "...",
-      "co_code": "MSFT",
-      "source_id": "ir-msft-fy2026-q1-transcript",
-      "title": "Microsoft FY2026 Q1 Earnings Call Transcript",
-      "source_type": "transcript",
-      "period": "FY2026 Q1",
-      "locator": {
-        "paragraph_id": "paragraph-18"
-      },
-      "quoted_text": "逐字稿實際原文片段……",
-      "metadata": {
-        "speaker": "Satya Nadella",
-        "section": "Prepared Remarks",
-        "event_date": "2025-10-29"
-      },
-      "live_url": "https://www.microsoft.com/...",
-      "content_hash": "sha256:...",
-      "captured_at": "2026-07-20T00:00:00Z"
-    }
-  ],
-  "routes": ["transcript"],
-  "trace_id": "trace-id",
-  "verification": {
-    "passed": true
-  },
-  "data_versions": ["ir:MSFT:FY2026-Q1:sha256"]
-}
-```
-
-### 3.3 介面顯示
-
-```text
-標題：MSFT FY2026 Q1 法說會
-
-發表人：Satya Nadella
-
-內文：
-管理層表示 AI 與雲端需求持續增加……[1]
-
-來源內容：
-「逐字稿實際原文片段……」
-
-來源位置：Prepared Remarks / paragraph 18
-來源網址：https://www.microsoft.com/...
-```
-
-若命中多位發言人，`speakers` 與 `sources` 必須保留多筆資料，不能將不同人的發言合併後標成同一位 speaker。
-
-### 3.4 拒答輸出
-
-```json
-{
-  "schema_version": "1.1",
-  "status": "refused",
-  "answer": "目前找不到指定期間的官方法說會逐字稿。",
-  "co_code": "AAPL",
-  "display": null,
-  "citations": [],
-  "routes": ["transcript"],
-  "trace_id": "trace-id",
-  "verification": {
-    "passed": false
-  },
-  "data_versions": []
-}
-```
-
-## 4. 欄位來源規則
-
-| 輸出欄位 | 資料來源 | 允許模型產生 |
-|---|---|---:|
-| `display.title` | `co_code + period` 的固定格式 | 否 |
-| `display.period` | 已驗證 citation period | 否 |
-| `display.speakers` | citation `metadata.speaker` 去重 | 否 |
-| `display.content` | 已通過引用驗證的 `answer` | 是，但必須驗證 |
-| `source_content` | citation `quoted_text` | 否 |
-| `section` | citation `metadata.section` | 否 |
-| `source_url` | source preview `live_url` | 否 |
-| `locator` | citation locator | 否 |
-| `content_hash` | source preview hash | 否 |
-
-建議以 deterministic transformer 從已驗證結果建立 `display`，不要再呼叫一次模型生成顯示欄位。
-
-## 5. 版本策略
-
-### 5.1 不破壞相容性的修改
-
-以下通常可以增加 minor version，例如 `1.0` → `1.1`：
-
-- 新增 optional 欄位。
-- 新增 `display`，同時保留 `answer` 與 `citations`。
-- citation metadata 新增 optional 欄位。
-- 補充 Tool description，但不改變行為。
-
-### 5.2 破壞相容性的修改
-
-以下必須升 major version，或建立新工具：
-
-- 刪除或重新命名既有欄位。
-- 將 optional 欄位改為 required。
-- 改變欄位型別，例如 string 改成 array。
-- 改變 `answered`、`refused`、`needs_clarification` 的語意。
-- 改變 citation 或 verification 的最低要求。
-- 將法說會與財務資料重新混入同一個工具。
-
-建議建立新工具名稱，例如：
-
-```text
-ask_earnings_call       # 保留既有契約
-ask_earnings_call_v2    # 新的破壞性契約
-```
-
-舊工具至少保留一個遷移週期，確認所有 Agent／Client 已切換後才移除。
-
-## 6. 修改 MCP 規格的標準流程
-
-### Step 1：先修改文件
-
-在實作前先更新：
-
-- `docs/VERIFIED_RAG_MCP_OUTPUT_SPEC.md`
-- 本文件中的 JSON 範例與版本紀錄
-
-明確定義：
-
-- Tool 名稱與用途。
-- input schema。
-- 成功、拒答、追問輸出。
-- required／optional 欄位。
-- citation 與 verification 規則。
-- 相容性及遷移方式。
-
-### Step 2：建立型別模型
-
-公開 MCP Envelope 與顯示模型位於 `backend/app/mcp_contracts.py`；共用 Evidence 模型位於 `backend/app/models.py`。例如：
-
-```python
-class TranscriptDisplaySource(BaseModel):
-    citation_index: int
-    speaker: str | None = None
-    section: str | None = None
-    source_content: str
-    source_url: str | None = None
-    locator: SourceLocator
-    content_hash: str | None = None
-
-
-class TranscriptDisplay(BaseModel):
-    title: str
-    period: str
-    speakers: list[str]
-    content: str
-    sources: list[TranscriptDisplaySource]
-```
-
-正式輸出應由 Pydantic model 驗證，不建議長期使用沒有型別限制的任意 `dict`。
-
-### Step 3：修改 MCP Tool
-
-法說會工具位置：
-
-```text
-backend/mcp_servers/transcript.py
-```
-
-財務工具位置：
-
-```text
-backend/mcp_servers/rag.py
-```
-
-修改時必須維持：
-
-- Transcript MCP 只能使用 `transcript` citation。
-- Financial MCP 不得使用 `transcript` citation。
-- `display.sources` 必須由驗證後 citations 建立。
-- 驗證失敗時不得回傳成功顯示內容。
-- 財務資料內部改成 Financial Schema v2 或新增 Provider Key，不應改變公開 Envelope；只要 Evidence/Citation 欄位不變，就不需要升 MCP major version。
-
-### Step 4：更新 Client 型別與介面
-
-若前端需要顯示新欄位，修改：
-
-```text
-frontend/src/types.ts
-frontend/src/App.tsx
-```
-
-`display` 是 required-but-nullable：財務與拒答回應必須為 `null`，逐字稿成功回答則為 object。前端應依值是否為 `null` 回退顯示既有 `answer` 與 citation。
-
-### Step 5：更新自動化測試
-
-至少修改或新增：
-
-```text
-backend/tests/test_transcript_mcp.py
-backend/tests/test_rag_mcp.py
-backend/tests/test_http_mcp_integration.py
-eval/transcript_golden_set.json
-```
-
-法說會輸出測試至少要驗證：
-
-- `display.title` 的公司與期間正確。
-- speaker 等於 citation metadata speaker。
-- `source_content` 完全等於 citation `quoted_text`。
-- source URL、locator、hash 可回查。
-- 多位 speaker 不會被錯誤合併。
-- `refused` 時 `display=null` 且 citation 為空。
-- Financial MCP 不會因本次修改而回傳 transcript。
-
-### Step 6：執行驗收
+> 本文件供維護者修改 Public MCP Tool 或 Response Schema。現行公開契約為 `2.0`。
+
+## 1. 現行決策
+
+- 所有公開 Tool 的公司範圍只來自自然語言 `query`。
+- 對外統一使用 `company_code`；`co_code` 是內部資料模型名稱。
+- 回答 Tool 使用精簡的 Answer Envelope；檢索 Tool 使用 `items`。
+- Agent 以 `status`、citations 與 warnings 判斷結果，不依賴內部驗證 trace。
+- 完整逐字稿用 deterministic reader 與 cursor；主題問題才用向量檢索。
+- 法說會 speaker 與 title 儲存在 turn/block 屬性，不建立 Speaker 節點。
+- `section` 可供 parser、chunking 與 retrieval 使用，但不對外輸出。
+- HTTP API 1.1 與 Public MCP 2.0 是兩個 adapter contract，不能混用版本號。
+
+## 2. 程式位置
+
+| 內容 | 位置 |
+|---|---|
+| Public response models | `backend/app/mcp_contracts.py` |
+| Legacy HTTP models | `backend/app/http_contracts.py` |
+| Financial MCP tools | `backend/mcp_servers/rag.py` |
+| Transcript MCP tools | `backend/mcp_servers/transcript.py` |
+| HTTP → Public MCP adapter | `backend/app/public_mcp_service.py` |
+| Company/period parsing | `backend/app/company_resolver.py`, `period_resolver.py` |
+| Runtime tests | `backend/tests/test_rag_mcp.py`, `test_transcript_mcp.py` |
+| Machine schema exporter | `backend/scripts/export_mcp_spec.py` |
+
+## 3. 新增或修改 Tool
+
+1. 先界定 domain 與允許的 source types；不同信任政策應建立不同 Public MCP。
+2. 定義最小輸入。公司名稱不可成為額外 selector；對話 Agent 必須產生自足 `query`。
+3. 在 `mcp_contracts.py` 建立明確 Pydantic response model；所有公開欄位固定且可驗證。
+4. Tool 必須設定 `output_schema=Model.model_json_schema()`，回傳前再 `model_dump(mode="json")`。
+5. 補三種狀態、來源隔離、欄位 required/nullability 與真實 MCP transport 測試。
+6. 更新人工規格、`mcp-tools.json`、Golden Set 與版本。
+
+不要把供應商原始 payload、DB 欄位名、SQL、模型 trace、credentials 或任意 metadata 直接公開。
+先由 typed adapter 轉成內部 Evidence，再由 compact transformer 產生公共格式。
+
+## 4. 版本規則
+
+需要升 major：
+
+- 刪除或重新命名欄位；
+- 將 nullable 改為 non-nullable；
+- 改變 status、安全或 citation 語意；
+- 修改 Tool input，使舊呼叫失效。
+
+可升 minor：新增可忽略的 optional 欄位或向後相容的新 Tool。修文件或不影響契約的 bug 可升 patch。
+不能只改文件版本；Pydantic model、FastMCP server version、機器 Schema、測試與 prompt 必須一致。
+
+## 5. Response 審查問題
+
+- Agent 是否真的需要這個欄位才能回答或追溯？
+- 欄位是否與其他欄位重複？
+- 小模型是否能用固定規則判斷，而不需理解內部驗證結構？
+- 沒有 URL 時是否仍可追溯？
+- 多季、多發言人與分頁是否保持固定形狀？
+- Financial 與 Transcript 來源是否仍隔離？
+- 這次改動是否意外破壞 Legacy HTTP？
+
+若答案只是方便除錯，欄位應留在 log／trace，而非 Public MCP response。
+
+## 6. 驗證命令
 
 ```bash
-make verify
 cd backend
-../.venv/bin/python -m scripts.evaluate_sec
-../.venv/bin/python -m scripts.evaluate_transcripts
+DATA_MODE=mock MCP_ENABLED=false ../.venv/bin/python -m pytest -q tests/test_rag_mcp.py tests/test_transcript_mcp.py tests/test_product_runtime.py tests/test_api.py
+DATA_MODE=mock MCP_ENABLED=false ../.venv/bin/python -m scripts.export_mcp_spec --in-process
+../.venv/bin/ruff check app mcp_servers scripts tests
+../.venv/bin/python -m compileall -q app mcp_servers scripts
 ```
 
-任一 Golden Set、來源隔離或拒答測試失敗，都不能發布新規格。
+正式交付另需在允許 localhost socket 的環境跑 MCP HTTP initialize/tools-list/invoke integration tests。
 
-### Step 7：重新啟動與端對端測試
+## 7. Change Proposal 範本
 
-```bash
-.venv/bin/python backend/scripts/run_local.py
+```text
+目的：
+受影響 Tool：
+目前版本：
+目標版本：
+輸入差異：
+輸出差異：
+來源與安全語意是否改變：
+HTTP 相容性：
+遷移方式：
+測試與 Golden Set：
+文件與 machine schema：
 ```
 
-使用 MCP Client 實際呼叫 `ask_earnings_call`，確認 Tool Schema 與回傳 JSON 都符合文件，而不只是直接呼叫 Python function。
-
-## 7. 變更提案模板
-
-每次修改可以先填以下模板：
-
-```markdown
-# MCP Change Proposal
-
-- Tool：ask_earnings_call
-- 原版本：1.1
-- 新版本：1.2
-- 修改目的：
-- 新增欄位：
-- 刪除／重新命名欄位：
-- Required 欄位變更：
-- Status 語意是否改變：否
-- Citation 規則是否改變：否
-- 是否向下相容：是
-- Client 遷移方式：
-- Golden Set 變更：
-- 回復方案：
-```
-
-## 8. 發布檢查表
-
-- [ ] 文件與程式的 `schema_version` 一致。
-- [ ] Tool description 與實際資料範圍一致。
-- [ ] 成功、拒答、追問案例都有固定 Schema。
-- [ ] 新欄位已加入 Pydantic／TypeScript 型別。
-- [ ] `source_content` 沒有被模型改寫。
-- [ ] 財務與逐字稿來源仍然隔離。
-- [ ] 動態財務 Key 只有核准 Mapping 能進入 Evidence，未知 Key 不會被模型猜測。
-- [ ] 所有 backend tests 通過。
-- [ ] SEC 與 transcript Golden Set 通過。
-- [ ] Frontend build 通過。
-- [ ] 實際 MCP HTTP 呼叫通過。
-- [ ] 破壞性修改已有新工具或遷移期。
-
-## 9. 本次實作狀態
-
-公開 Tool 輸入契約為 `2.0`：公司只能寫在自然語言 `query`，不再提供 `co_code` 選擇參數。各 Tool 只保留必要的非公司控制參數，例如 `limit`、`cursor` 與 `quarters`。
-
-回應仍採用 `schema_version: 1.1`。頂層 `display` 為 required-but-nullable，並保留既有 `answer`、`citations`、`verification` 與 `data_versions`；回應中的 `co_code` 是 Resolver 結果，用於追溯，不是使用者輸入。
-
-Runtime 已使用 Pydantic 驗證並對外發布 JSON output schema。若未來要改變 `display` 型別、子欄位 required 狀態或狀態語意，必須規劃 major schema／新版工具，不可直接破壞既有工具。
+實際欄位定義見 [Runtime 輸出規格](VERIFIED_RAG_MCP_OUTPUT_SPEC.md)，外部操作方式見
+[對外交付規格](MCP_PROVIDER_HANDOFF_SPEC.md)。

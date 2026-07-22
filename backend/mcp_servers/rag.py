@@ -15,10 +15,11 @@ from app.mcp_contracts import (
     MCP_SCHEMA_VERSION,
     MCP_TOOL_CONTRACT_VERSION,
     EvidenceToolResponse,
-    VerifiedCitation,
     VerifiedRAGResponse,
     clarification_response,
-    response_confidence,
+    compact_citation,
+    compact_evidence,
+    response_period,
 )
 from app.validation import EvidenceValidationError, EvidenceValidator
 
@@ -84,40 +85,19 @@ def create_rag_mcp(
             for source_id, preview in zip(source_ids, previews, strict=True)
             if preview is not None
         }
-        citations: list[VerifiedCitation] = []
-        for item in result.citations:
-            preview = provenance.get(item.source_id)
-            citations.append(
-                VerifiedCitation.model_validate(
-                    {
-                    **item.model_dump(mode="json"),
-                    "live_url": preview.live_url if preview else None,
-                    "content_hash": preview.content_hash if preview else None,
-                    "captured_at": preview.captured_at if preview else None,
-                    }
-                )
-            )
+        citations = [
+            compact_citation(item, provenance.get(item.source_id)) for item in result.citations
+        ]
 
-        passed = result.verification.get("passed") is True
+        passed = result.verification.get("passed") is True and bool(citations)
         response = VerifiedRAGResponse(
             schema_version=MCP_SCHEMA_VERSION,
             status="answered" if passed else "refused",
             answer=result.answer,
-            co_code=result.co_code,
-            display=None,
-            routes=[route for route in result.routes if route in {"knowledge", "finance"}],
+            company_code=result.co_code,
+            period=response_period(result),
             citations=citations,
-            trace_id=result.trace_id,
-            verification=result.verification,
-            verified=passed,
-            confidence=response_confidence(result),
-            verification_notes=[
-                str(result.verification.get("semantic", {}).get("reason", "verification_complete"))
-            ],
             warnings=[] if passed else ["Financial evidence did not pass all verification gates."],
-            data_versions=result.data_versions,
-            latency_ms=(time.perf_counter() - started) * 1000,
-            period_resolution=result.period_resolution,
             clarification_question=None,
         )
         return response.model_dump(mode="json")
@@ -125,35 +105,26 @@ def create_rag_mcp(
     @server.tool(output_schema=EvidenceToolResponse.model_json_schema())
     async def retrieve_financial_evidence(query: str) -> dict[str, Any]:
         """Retrieve validated financial evidence without generating an answer."""
-        started = time.perf_counter()
         try:
             result = await resolved_service.retrieve_evidence(query)
         except (EvidenceValidationError, ValueError) as exc:
             return EvidenceToolResponse(
                 schema_version=MCP_SCHEMA_VERSION,
                 status="needs_clarification",
-                co_code=None,
+                company_code=None,
                 period=None,
-                evidence=[],
-                verified=False,
-                verification={"passed": False, "reason": "needs_clarification"},
+                items=[],
                 warnings=[],
-                latency_ms=(time.perf_counter() - started) * 1000,
                 clarification_question=str(exc),
-                period_resolution=None,
             ).model_dump(mode="json")
         evidence = result["evidence"]
         response = EvidenceToolResponse(
             schema_version=MCP_SCHEMA_VERSION,
             status="retrieved" if evidence else "refused",
-            co_code=result["co_code"],
+            company_code=result["co_code"],
             period=result["period"],
-            evidence=evidence,
-            verified=bool(evidence),
-            verification=result["verification"],
+            items=[compact_evidence(item) for item in evidence],
             warnings=[] if evidence else ["No verified financial evidence was found."],
-            latency_ms=(time.perf_counter() - started) * 1000,
-            period_resolution=result["period_resolution"],
             clarification_question=None,
         )
         return response.model_dump(mode="json")

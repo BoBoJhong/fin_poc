@@ -10,6 +10,7 @@ AS_OF = datetime(2026, 7, 20, tzinfo=UTC)
 def test_explicit_period_variants_are_canonicalized() -> None:
     assert canonical_period("FY2026 Q1 revenue") == "2026Q1"
     assert canonical_period("Q2 2025 earnings") == "2025Q2"
+    assert canonical_period("微軟 2025 Q3 法說會內容") == "2025Q3"
     assert canonical_period("2024 年第三季") == "2024Q3"
     assert canonical_fiscal_label("Microsoft FY2026 Q3 call") == "FY2026 Q3"
     assert canonical_fiscal_label("Microsoft 2026 Q1 call") is None
