@@ -9,10 +9,12 @@ from app.config import Settings
 from app.models import (
     CompanyCandidate,
     CompanySummary,
+    EarningsCallRecord,
     Evidence,
     FiscalCalendar,
     SourcePreview,
     ToolEnvelope,
+    TranscriptConversationPage,
 )
 from app.repositories import (
     FinanceRepository,
@@ -247,3 +249,36 @@ class MCPGateway:
         )
         preview = payload.get("preview")
         return SourcePreview.model_validate(preview) if preview else None
+
+    async def get_transcript_conversation(
+        self,
+        co_code: str,
+        period: str | None = None,
+        cursor: int = 0,
+        limit: int = 20,
+    ) -> TranscriptConversationPage | None:
+        if not self.settings.mcp_enabled:
+            return await self.knowledge.get_transcript_conversation(co_code, period, cursor, limit)
+        payload = await self._call(
+            "read_earnings_call_transcript",
+            {
+                "co_code": co_code,
+                "period": period,
+                "cursor": cursor,
+                "limit": limit,
+            },
+        )
+        page = payload.get("transcript")
+        return TranscriptConversationPage.model_validate(page) if page else None
+
+    async def list_earnings_calls(
+        self, co_code: str, limit: int = 20
+    ) -> list[EarningsCallRecord]:
+        bounded_limit = min(max(limit, 1), 20)
+        if not self.settings.mcp_enabled:
+            return await self.knowledge.list_earnings_calls(co_code, bounded_limit)
+        payload = await self._call(
+            "list_earnings_call_records",
+            {"co_code": co_code, "limit": bounded_limit},
+        )
+        return [EarningsCallRecord.model_validate(item) for item in payload.get("calls", [])]

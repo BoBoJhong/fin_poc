@@ -4,7 +4,14 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from app.models import ChatResponse, Evidence, PeriodResolution, SourceLocator
+from app.models import (
+    ChatResponse,
+    EarningsCallRecord,
+    Evidence,
+    PeriodResolution,
+    SourceLocator,
+    TranscriptConversationTurn,
+)
 
 
 MCP_SCHEMA_VERSION = "1.1"
@@ -43,6 +50,71 @@ class TranscriptDisplay(BaseModel):
     speakers: list[str] = Field(default_factory=list)
     content: str
     sources: list[TranscriptDisplaySource] = Field(default_factory=list)
+
+
+class TranscriptBlockContent(BaseModel):
+    section: str | None = None
+    text: str
+    paragraph_id: str | None = None
+    source_id: str
+    content_hash: str | None = None
+    source_url: str | None = None
+
+
+class TranscriptBlockItem(BaseModel):
+    period: str | None = None
+    fiscal_label: str | None = None
+    speaker: str | None = None
+    speakers: list[str] = Field(default_factory=list)
+    title: str
+    score: float = Field(ge=0, le=1)
+    content: TranscriptBlockContent
+
+
+class TranscriptBlockResponse(BaseModel):
+    schema_version: Literal["1.1"]
+    status: Literal["retrieved", "refused", "needs_clarification"]
+    co_code: str | None
+    period: str | None
+    items: list[TranscriptBlockItem] = Field(default_factory=list)
+    verified: bool
+    warnings: list[str] = Field(default_factory=list)
+    latency_ms: float = Field(ge=0)
+    clarification_question: str | None = None
+
+
+class TranscriptConversationResponse(BaseModel):
+    status: Literal["retrieved", "refused", "needs_clarification"]
+    company_code: str | None = None
+    quarter: str | None = None
+    conversations: list[TranscriptConversationTurn] = Field(default_factory=list)
+    next_cursor: int | None = Field(default=None, ge=0)
+    message: str | None = None
+
+
+class EarningsCallListResponse(BaseModel):
+    status: Literal["retrieved", "refused", "needs_clarification"]
+    company_code: str | None = None
+    earnings_calls: list[EarningsCallRecord] = Field(default_factory=list)
+    message: str | None = None
+
+
+class MultiPeriodEarningsCallGroup(BaseModel):
+    quarter: str
+    period: str
+    event_date: str | None = None
+    source_id: str
+    coverage_mode: Literal["topic_retrieval", "broad_facet_retrieval"]
+    coverage_queries: list[str] = Field(default_factory=list)
+    evidence: list[Evidence] = Field(default_factory=list)
+
+
+class MultiPeriodEarningsCallResponse(BaseModel):
+    status: Literal["retrieved", "refused", "needs_clarification"]
+    company_code: str | None = None
+    quarters: list[MultiPeriodEarningsCallGroup] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    message: str | None = None
 
 
 class VerifiedRAGResponse(BaseModel):
@@ -117,9 +189,12 @@ def build_transcript_display(
     period = periods[0] if len(periods) == 1 else None
     speakers = list(
         dict.fromkeys(
-            str(item.metadata["speaker"])
+            str(speaker)
             for item in citations
-            if item.metadata.get("speaker")
+            for speaker in (
+                item.metadata.get("speakers")
+                or ([item.metadata["speaker"]] if item.metadata.get("speaker") else [])
+            )
         )
     )
     title_period = period or "多期間"

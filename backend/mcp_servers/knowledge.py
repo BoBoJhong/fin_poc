@@ -62,17 +62,45 @@ async def get_source_preview(source_id: str, co_code: str) -> dict:
 
 
 @mcp.tool
-async def list_document_periods(
-    co_code: str, source_types: list[str] | None = None
-) -> dict:
+async def list_document_periods(co_code: str, source_types: list[str] | None = None) -> dict:
     """List verified document periods for one company and optional source types."""
     code = validator.validate_scope(co_code)
-    periods = await repository.list_periods(
-        code, tuple(source_types) if source_types else None
-    )
+    periods = await repository.list_periods(code, tuple(source_types) if source_types else None)
     return {
         "periods": periods,
         "metadata": {"tool": "list_document_periods", "co_code": code},
+    }
+
+
+@mcp.tool
+async def read_earnings_call_transcript(
+    co_code: str,
+    period: str | None = None,
+    cursor: int = 0,
+    limit: int = 20,
+) -> dict:
+    """Read one official earnings call in speaker-turn order without vector ranking."""
+    code = validator.validate_scope(co_code)
+    page = await repository.get_transcript_conversation(
+        code,
+        period,
+        max(cursor, 0),
+        min(max(limit, 1), 50),
+    )
+    return {
+        "transcript": page.model_dump(mode="json") if page else None,
+        "metadata": {"tool": "deterministic_transcript_reader", "co_code": code},
+    }
+
+
+@mcp.tool
+async def list_earnings_call_records(co_code: str, limit: int = 20) -> dict:
+    """List available official earnings calls for one company in reverse chronological order."""
+    code = validator.validate_scope(co_code)
+    calls = await repository.list_earnings_calls(code, min(max(limit, 1), 20))
+    return {
+        "calls": [call.model_dump(mode="json") for call in calls],
+        "metadata": {"tool": "list_earnings_call_records", "co_code": code},
     }
 
 

@@ -68,10 +68,13 @@ curl -X POST http://127.0.0.1:8000/api/v1/chat \
 | Endpoint | Tools | Data boundary |
 |---|---|---|
 | port 8003 | `ask_financial_rag`, `retrieve_financial_evidence` | 財務 DB/API、SEC、官方財務文件 |
-| port 8004 | `ask_earnings_call`, `retrieve_earnings_call_evidence` | 法說會逐字稿 only |
+| port 8004 | `ask_earnings_call`, `list_earnings_calls`, `retrieve_multi_period_earnings_call_evidence`, `get_earnings_call_transcript`, `retrieve_earnings_call_evidence`, `retrieve_earnings_call_blocks` | 法說會逐字稿 only |
 
 單一 Agent 已足夠。純財務或逐字稿問題呼叫對應工具；混合問題分別呼叫兩個工具後，
 保留各自引用再合併。收到 `refused` 時不得用模型記憶補答。
+「最近幾季」先呼叫 `list_earnings_calls`，再以
+`retrieve_multi_period_earnings_call_evidence` 取得逐季隔離的證據。重點型問題會涵蓋營運、
+策略、展望／風險及 Q&A 四個面向；此輸出是可引用的廣度檢索，不宣稱等同完整逐字稿摘要。
 
 ## 資料模式
 
@@ -114,7 +117,8 @@ COMPANY_LLM_MODEL=deployed-model-name
 ```
 
 沒有正式 LLM 時，`retrieve_financial_evidence` 與
-`retrieve_earnings_call_evidence` 仍可交付外部 Agent 使用；`/health/readiness` 會誠實回報
+`retrieve_earnings_call_evidence`、簡潔逐字稿 reader `get_earnings_call_transcript` 與詳細巢狀
+JSON `retrieve_earnings_call_blocks` 仍可交付外部 Agent 使用；`/health/readiness` 會誠實回報
 `evidence_only_ready`。
 
 ## 外部資料接入

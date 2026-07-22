@@ -1680,6 +1680,599 @@
           }
         },
         {
+          "name": "list_earnings_calls",
+          "description": "List available calls so an agent never guesses what recent quarters means.",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "co_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "limit": {
+                "default": 10,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "outputSchema": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "retrieved",
+                  "refused",
+                  "needs_clarification"
+                ],
+                "title": "Status",
+                "type": "string"
+              },
+              "company_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Company Code"
+              },
+              "earnings_calls": {
+                "items": {
+                  "properties": {
+                    "company_code": {
+                      "title": "Company Code",
+                      "type": "string"
+                    },
+                    "period": {
+                      "title": "Period",
+                      "type": "string"
+                    },
+                    "quarter": {
+                      "title": "Quarter",
+                      "type": "string"
+                    },
+                    "event_date": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Event Date"
+                    },
+                    "source_id": {
+                      "title": "Source Id",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "company_code",
+                    "period",
+                    "quarter",
+                    "source_id"
+                  ],
+                  "title": "EarningsCallRecord",
+                  "type": "object"
+                },
+                "title": "Earnings Calls",
+                "type": "array"
+              },
+              "message": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Message"
+              }
+            },
+            "required": [
+              "status"
+            ],
+            "title": "EarningsCallListResponse",
+            "type": "object"
+          }
+        },
+        {
+          "name": "retrieve_multi_period_earnings_call_evidence",
+          "description": "Retrieve separately grouped evidence for up to four earnings-call quarters.",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "co_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "quarters": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "limit": {
+                "default": 3,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "outputSchema": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "retrieved",
+                  "refused",
+                  "needs_clarification"
+                ],
+                "title": "Status",
+                "type": "string"
+              },
+              "company_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Company Code"
+              },
+              "quarters": {
+                "items": {
+                  "properties": {
+                    "quarter": {
+                      "title": "Quarter",
+                      "type": "string"
+                    },
+                    "period": {
+                      "title": "Period",
+                      "type": "string"
+                    },
+                    "event_date": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Event Date"
+                    },
+                    "source_id": {
+                      "title": "Source Id",
+                      "type": "string"
+                    },
+                    "coverage_mode": {
+                      "enum": [
+                        "topic_retrieval",
+                        "broad_facet_retrieval"
+                      ],
+                      "title": "Coverage Mode",
+                      "type": "string"
+                    },
+                    "coverage_queries": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "title": "Coverage Queries",
+                      "type": "array"
+                    },
+                    "evidence": {
+                      "items": {
+                        "properties": {
+                          "evidence_id": {
+                            "title": "Evidence Id",
+                            "type": "string"
+                          },
+                          "co_code": {
+                            "title": "Co Code",
+                            "type": "string"
+                          },
+                          "source_id": {
+                            "title": "Source Id",
+                            "type": "string"
+                          },
+                          "source_type": {
+                            "enum": [
+                              "financial_report",
+                              "transcript",
+                              "url",
+                              "database",
+                              "graph"
+                            ],
+                            "title": "SourceType",
+                            "type": "string"
+                          },
+                          "title": {
+                            "title": "Title",
+                            "type": "string"
+                          },
+                          "content": {
+                            "title": "Content",
+                            "type": "string"
+                          },
+                          "score": {
+                            "maximum": 1,
+                            "minimum": 0,
+                            "title": "Score",
+                            "type": "number"
+                          },
+                          "period": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null,
+                            "title": "Period"
+                          },
+                          "locator": {
+                            "properties": {
+                              "page": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null,
+                                "title": "Page"
+                              },
+                              "paragraph_id": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null,
+                                "title": "Paragraph Id"
+                              },
+                              "timestamp": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null,
+                                "title": "Timestamp"
+                              },
+                              "table": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null,
+                                "title": "Table"
+                              },
+                              "primary_key": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null,
+                                "title": "Primary Key"
+                              },
+                              "columns": {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "title": "Columns",
+                                "type": "array"
+                              },
+                              "graph_path": {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "title": "Graph Path",
+                                "type": "array"
+                              }
+                            },
+                            "title": "SourceLocator",
+                            "type": "object"
+                          },
+                          "captured_at": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null,
+                            "title": "Captured At"
+                          },
+                          "content_hash": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null,
+                            "title": "Content Hash"
+                          },
+                          "data_version": {
+                            "default": "demo-v1",
+                            "title": "Data Version",
+                            "type": "string"
+                          },
+                          "metadata": {
+                            "additionalProperties": true,
+                            "title": "Metadata",
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "evidence_id",
+                          "co_code",
+                          "source_id",
+                          "source_type",
+                          "title",
+                          "content",
+                          "score"
+                        ],
+                        "title": "Evidence",
+                        "type": "object"
+                      },
+                      "title": "Evidence",
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "quarter",
+                    "period",
+                    "source_id",
+                    "coverage_mode"
+                  ],
+                  "title": "MultiPeriodEarningsCallGroup",
+                  "type": "object"
+                },
+                "title": "Quarters",
+                "type": "array"
+              },
+              "warnings": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Warnings",
+                "type": "array"
+              },
+              "message": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Message"
+              }
+            },
+            "required": [
+              "status"
+            ],
+            "title": "MultiPeriodEarningsCallResponse",
+            "type": "object"
+          }
+        },
+        {
+          "name": "get_earnings_call_transcript",
+          "description": "Read the latest or specified earnings call as ordered speaker conversations.",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "co_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "cursor": {
+                "default": 0,
+                "type": "integer"
+              },
+              "limit": {
+                "default": 20,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "outputSchema": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "retrieved",
+                  "refused",
+                  "needs_clarification"
+                ],
+                "title": "Status",
+                "type": "string"
+              },
+              "company_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Company Code"
+              },
+              "quarter": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Quarter"
+              },
+              "conversations": {
+                "items": {
+                  "properties": {
+                    "speaker": {
+                      "properties": {
+                        "name": {
+                          "title": "Name",
+                          "type": "string"
+                        },
+                        "title": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null,
+                          "title": "Title"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "title": "TranscriptSpeaker",
+                      "type": "object"
+                    },
+                    "content": {
+                      "title": "Content",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "speaker",
+                    "content"
+                  ],
+                  "title": "TranscriptConversationTurn",
+                  "type": "object"
+                },
+                "title": "Conversations",
+                "type": "array"
+              },
+              "next_cursor": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Next Cursor"
+              },
+              "message": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Message"
+              }
+            },
+            "required": [
+              "status"
+            ],
+            "title": "TranscriptConversationResponse",
+            "type": "object"
+          }
+        },
+        {
           "name": "retrieve_earnings_call_evidence",
           "description": "Retrieve validated transcript evidence without generating an answer.",
           "inputSchema": {
@@ -2078,6 +2671,245 @@
               "period_resolution"
             ],
             "title": "EvidenceToolResponse",
+            "type": "object"
+          }
+        },
+        {
+          "name": "retrieve_earnings_call_blocks",
+          "description": "Retrieve transcript blocks with nested, attribution-preserving content objects.",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "co_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "outputSchema": {
+            "properties": {
+              "schema_version": {
+                "const": "1.1",
+                "title": "Schema Version",
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "retrieved",
+                  "refused",
+                  "needs_clarification"
+                ],
+                "title": "Status",
+                "type": "string"
+              },
+              "co_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Co Code"
+              },
+              "period": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Period"
+              },
+              "items": {
+                "items": {
+                  "properties": {
+                    "period": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Period"
+                    },
+                    "fiscal_label": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Fiscal Label"
+                    },
+                    "speaker": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "title": "Speaker"
+                    },
+                    "speakers": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "title": "Speakers",
+                      "type": "array"
+                    },
+                    "title": {
+                      "title": "Title",
+                      "type": "string"
+                    },
+                    "score": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "title": "Score",
+                      "type": "number"
+                    },
+                    "content": {
+                      "properties": {
+                        "section": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null,
+                          "title": "Section"
+                        },
+                        "text": {
+                          "title": "Text",
+                          "type": "string"
+                        },
+                        "paragraph_id": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null,
+                          "title": "Paragraph Id"
+                        },
+                        "source_id": {
+                          "title": "Source Id",
+                          "type": "string"
+                        },
+                        "content_hash": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null,
+                          "title": "Content Hash"
+                        },
+                        "source_url": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null,
+                          "title": "Source Url"
+                        }
+                      },
+                      "required": [
+                        "text",
+                        "source_id"
+                      ],
+                      "title": "TranscriptBlockContent",
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "score",
+                    "content"
+                  ],
+                  "title": "TranscriptBlockItem",
+                  "type": "object"
+                },
+                "title": "Items",
+                "type": "array"
+              },
+              "verified": {
+                "title": "Verified",
+                "type": "boolean"
+              },
+              "warnings": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Warnings",
+                "type": "array"
+              },
+              "latency_ms": {
+                "minimum": 0,
+                "title": "Latency Ms",
+                "type": "number"
+              },
+              "clarification_question": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Clarification Question"
+              }
+            },
+            "required": [
+              "schema_version",
+              "status",
+              "co_code",
+              "period",
+              "verified",
+              "latency_ms"
+            ],
+            "title": "TranscriptBlockResponse",
             "type": "object"
           }
         }

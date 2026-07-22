@@ -94,6 +94,35 @@ class PeriodResolution(BaseModel):
     fiscal_calendar: FiscalCalendar | None = None
 
 
+class TranscriptSpeaker(BaseModel):
+    name: str
+    title: str | None = None
+
+
+class TranscriptConversationTurn(BaseModel):
+    speaker: TranscriptSpeaker
+    content: str
+
+
+class TranscriptConversationPage(BaseModel):
+    company_code: str
+    period: str
+    quarter: str
+    event_date: str | None = None
+    conversations: list[TranscriptConversationTurn] = Field(default_factory=list)
+    next_cursor: int | None = Field(default=None, ge=0)
+    source_id: str
+    source_url: str | None = None
+
+
+class EarningsCallRecord(BaseModel):
+    company_code: str
+    period: str
+    quarter: str
+    event_date: str | None = None
+    source_id: str
+
+
 class ChatResponse(BaseModel):
     answer: str
     co_code: str

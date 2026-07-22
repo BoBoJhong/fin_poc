@@ -24,6 +24,7 @@ from app.financial_data import (
 )
 from scripts.init_data import create_indexes, embed, sha256
 from scripts.init_sqlite import SCHEMA, migrate_schema
+from scripts.text_blocks import build_semantic_blocks
 
 
 SEC_COMPANIES = {
@@ -199,19 +200,23 @@ def relevant_text(text: str) -> str:
     return "\n".join(keyword_lines[:500]) or text[:80_000]
 
 
-def chunk_text(text: str, max_chars: int = 1_200, max_chunks: int = 36) -> list[str]:
-    paragraphs = [line.strip() for line in text.splitlines() if len(line.strip()) >= 40]
-    chunks: list[str] = []
-    current = ""
-    for paragraph in paragraphs:
-        if current and len(current) + len(paragraph) + 1 > max_chars:
-            chunks.append(current)
-            current = ""
-            if len(chunks) >= max_chunks:
-                break
-        current = f"{current}\n{paragraph}".strip()
-    if current and len(chunks) < max_chunks:
-        chunks.append(current)
+def chunk_text(
+    text: str,
+    max_chars: int = 1_200,
+    min_chars: int = 240,
+    max_chunks: int | None = None,
+) -> list[str]:
+    paragraphs = [line.strip() for line in text.splitlines() if line.strip()]
+    chunks = build_semantic_blocks(
+        paragraphs,
+        max_chars=max_chars,
+        min_chars=min(min_chars, max_chars // 2),
+    )
+    if max_chunks is not None and len(chunks) > max_chunks:
+        raise ValueError(
+            f"SEC text requires {len(chunks)} chunks, exceeding explicit limit {max_chunks}; "
+            "refusing to truncate source text"
+        )
     return chunks
 
 
@@ -501,6 +506,16 @@ def seed_neo4j(
         data_version=filing.version,
         accession=filing.accession,
         report_date=filing.report_date,
+        database_=database,
+    )
+    driver.execute_query(
+        """
+        MATCH (document:Document {source_id: $source_id})-[:HAS_CHUNK]->(stale:Chunk)
+        WHERE NOT stale.chunk_id IN $chunk_ids
+        DETACH DELETE stale
+        """,
+        source_id=source_id,
+        chunk_ids=[row["chunk_id"] for row in rows],
         database_=database,
     )
     driver.execute_query(

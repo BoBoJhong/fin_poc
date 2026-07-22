@@ -2,7 +2,7 @@
 
 - 產品版本：`1.0.0`
 - 公開 MCP Schema：`1.1`
-- 最後更新：`2026-07-21`
+- 最後更新：`2026-07-22`
 
 這是本專案唯一的主要產品與工程規格。產品範圍、架構、啟動、資料接入、部署、可靠度、
 併發與驗收都以本文件為入口。對外 MCP 串接與新增 MCP 分別由兩份專用規格管理；只有修改
@@ -28,7 +28,7 @@
 | 領域 | Endpoint | Tools |
 |---|---|---|
 | 財務與申報文件 | `http://<server>:8003/mcp` | `ask_financial_rag`、`retrieve_financial_evidence` |
-| 法說會逐字稿 | `http://<server>:8004/mcp` | `ask_earnings_call`、`retrieve_earnings_call_evidence` |
+| 法說會逐字稿 | `http://<server>:8004/mcp` | `ask_earnings_call`、`list_earnings_calls`、`retrieve_multi_period_earnings_call_evidence`、`get_earnings_call_transcript`、`retrieve_earnings_call_evidence`、`retrieve_earnings_call_blocks` |
 
 ports `8001`、`8002` 是內部 Knowledge／Finance MCP，不提供給外部 Client。
 
@@ -38,6 +38,7 @@ ports `8001`、`8002` 是內部 Knowledge／Finance MCP，不提供給外部 Cli
 
 - 自然語言公司解析到 Company Master 的 `co_code`。
 - 明確季度與「最近一季／上一季／去年同期」解析。
+- 法說會問題使用 verified RAG；完整／最近一場內容使用依 event date 與 speaker turn 的確定性 reader。
 - 財務與法說會來源隔離、引用、拒答與 Source Preview。
 - Financial Schema v2、動態財務 Key、精確 Decimal、口徑與資料版本。
 - SQLite、Neo4j、核准外部 SQL DB、核准 JSON REST API Adapter。
@@ -73,6 +74,7 @@ make run
 ```text
 Microsoft 最近一季 revenue?
 Microsoft 2026 Q1 法說會提到哪些需求？
+取得微軟最近的法說會對話內容
 Apple 2035 Q4 revenue?
 ```
 

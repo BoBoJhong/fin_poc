@@ -13,7 +13,14 @@ from app.mcp_auth import build_mcp_auth
 from app.mcp_gateway import MCPGateway
 from app.mcp_contracts import (
     MCP_SCHEMA_VERSION,
+    EarningsCallListResponse,
     EvidenceToolResponse,
+    MultiPeriodEarningsCallGroup,
+    MultiPeriodEarningsCallResponse,
+    TranscriptBlockContent,
+    TranscriptBlockItem,
+    TranscriptBlockResponse,
+    TranscriptConversationResponse,
     VerifiedCitation,
     VerifiedRAGResponse,
     build_transcript_display,
@@ -46,10 +53,12 @@ def create_transcript_mcp(
         strict_input_validation=True,
         auth=build_mcp_auth(resolved_settings),
         instructions=(
-            "Use ask_earnings_call only for earnings-call transcript questions. It searches "
-            "transcripts only, preserves speaker and prepared-remarks/Q&A metadata, verifies "
-            "citations, and never supplements missing content with financial databases or "
-            "model memory. Preserve refused and needs_clarification statuses."
+            "Use ask_earnings_call for questions that require a supported answer. Use "
+            "list_earnings_calls before resolving requests such as recent quarters. Use "
+            "retrieve_multi_period_earnings_call_evidence for quarter-by-quarter comparison. Use "
+            "get_earnings_call_transcript when the user asks to read the latest or a specific "
+            "call; it returns ordered speaker turns instead of vector Top-K. Transcript tools "
+            "never supplement missing content with financial databases or model memory."
         ),
     )
 
@@ -82,10 +91,10 @@ def create_transcript_mcp(
             citations.append(
                 VerifiedCitation.model_validate(
                     {
-                    **item.model_dump(mode="json"),
-                    "live_url": preview.live_url if preview else None,
-                    "content_hash": preview.content_hash if preview else None,
-                    "captured_at": preview.captured_at if preview else None,
+                        **item.model_dump(mode="json"),
+                        "live_url": preview.live_url if preview else None,
+                        "content_hash": preview.content_hash if preview else None,
+                        "captured_at": preview.captured_at if preview else None,
                     }
                 )
             )
@@ -113,6 +122,107 @@ def create_transcript_mcp(
             clarification_question=None,
         )
         return response.model_dump(mode="json")
+
+    @server.tool(output_schema=EarningsCallListResponse.model_json_schema())
+    async def list_earnings_calls(
+        query: str, co_code: str | None = None, limit: int = 10
+    ) -> dict[str, Any]:
+        """List available calls so an agent never guesses what recent quarters means."""
+        try:
+            result = await resolved_service.list_earnings_calls(query, co_code, limit)
+        except (EvidenceValidationError, ValueError) as exc:
+            return EarningsCallListResponse(
+                status="needs_clarification",
+                message=str(exc),
+            ).model_dump(mode="json", exclude_none=True)
+        calls = result["calls"]
+        return EarningsCallListResponse(
+            status="retrieved" if calls else "refused",
+            company_code=result["co_code"],
+            earnings_calls=calls,
+            message=None if calls else "No earnings calls are available for this company.",
+        ).model_dump(mode="json", exclude_none=True)
+
+    @server.tool(output_schema=MultiPeriodEarningsCallResponse.model_json_schema())
+    async def retrieve_multi_period_earnings_call_evidence(
+        query: str,
+        co_code: str | None = None,
+        quarters: list[str] | None = None,
+        limit: int = 3,
+    ) -> dict[str, Any]:
+        """Retrieve separately grouped evidence for up to four earnings-call quarters."""
+        try:
+            result = await resolved_service.retrieve_multi_period_transcript_evidence(
+                query,
+                co_code,
+                quarters,
+                limit,
+            )
+        except (EvidenceValidationError, ValueError) as exc:
+            return MultiPeriodEarningsCallResponse(
+                status="needs_clarification",
+                message=str(exc),
+            ).model_dump(mode="json", exclude_none=True)
+        groups = [
+            MultiPeriodEarningsCallGroup(
+                quarter=group["call"].quarter,
+                period=group["call"].period,
+                event_date=group["call"].event_date,
+                source_id=group["call"].source_id,
+                coverage_mode=group["coverage_mode"],
+                coverage_queries=group["coverage_queries"],
+                evidence=group["evidence"],
+            )
+            for group in result["groups"]
+        ]
+        return MultiPeriodEarningsCallResponse(
+            status="retrieved" if groups else "refused",
+            company_code=result["co_code"],
+            quarters=groups,
+            warnings=(
+                []
+                if groups
+                else ["No official earnings-call transcript was found for the requested quarters."]
+            ),
+        ).model_dump(mode="json", exclude_none=True)
+
+    @server.tool(output_schema=TranscriptConversationResponse.model_json_schema())
+    async def get_earnings_call_transcript(
+        query: str,
+        co_code: str | None = None,
+        cursor: int = 0,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """Read the latest or specified earnings call as ordered speaker conversations."""
+        try:
+            result = await resolved_service.retrieve_transcript_conversation(
+                query,
+                co_code,
+                cursor=max(cursor, 0),
+                limit=min(max(limit, 1), 50),
+            )
+        except (EvidenceValidationError, ValueError) as exc:
+            return TranscriptConversationResponse(
+                status="needs_clarification",
+                message=str(exc),
+            ).model_dump(mode="json", exclude_none=True)
+        page = result["page"]
+        if page is None:
+            return TranscriptConversationResponse(
+                status="refused",
+                company_code=result["co_code"],
+                message="No official earnings-call transcript was found for the requested period.",
+            ).model_dump(mode="json", exclude_none=True)
+        response = TranscriptConversationResponse(
+            status="retrieved",
+            company_code=page.company_code,
+            quarter=page.quarter,
+            conversations=page.conversations,
+            next_cursor=page.next_cursor,
+        )
+        payload = response.model_dump(mode="json", exclude_none=True)
+        payload["conversations"] = [turn.model_dump(mode="json") for turn in page.conversations]
+        return payload
 
     @server.tool(output_schema=EvidenceToolResponse.model_json_schema())
     async def retrieve_earnings_call_evidence(
@@ -149,6 +259,70 @@ def create_transcript_mcp(
             latency_ms=(time.perf_counter() - started) * 1000,
             period_resolution=result["period_resolution"],
             clarification_question=None,
+        )
+        return response.model_dump(mode="json")
+
+    @server.tool(output_schema=TranscriptBlockResponse.model_json_schema())
+    async def retrieve_earnings_call_blocks(
+        query: str, co_code: str | None = None
+    ) -> dict[str, Any]:
+        """Retrieve transcript blocks with nested, attribution-preserving content objects."""
+        started = time.perf_counter()
+        try:
+            result = await resolved_service.retrieve_evidence(query, co_code)
+        except (EvidenceValidationError, ValueError) as exc:
+            return TranscriptBlockResponse(
+                schema_version=MCP_SCHEMA_VERSION,
+                status="needs_clarification",
+                co_code=None,
+                period=None,
+                items=[],
+                verified=False,
+                latency_ms=(time.perf_counter() - started) * 1000,
+                clarification_question=str(exc),
+            ).model_dump(mode="json")
+
+        evidence = result["evidence"]
+        source_ids = list(dict.fromkeys(item.source_id for item in evidence))
+        previews = await asyncio.gather(
+            *(
+                resolved_service.gateway.get_source_preview(source_id, result["co_code"])
+                for source_id in source_ids
+            )
+        )
+        source_urls = {
+            source_id: preview.live_url
+            for source_id, preview in zip(source_ids, previews, strict=True)
+            if preview is not None
+        }
+        items = [
+            TranscriptBlockItem(
+                period=item.period,
+                fiscal_label=item.metadata.get("fiscal_label"),
+                speaker=item.metadata.get("speaker"),
+                speakers=[str(value) for value in item.metadata.get("speakers", [])],
+                title=item.title,
+                score=item.score,
+                content=TranscriptBlockContent(
+                    section=item.metadata.get("section"),
+                    text=item.content,
+                    paragraph_id=item.locator.paragraph_id,
+                    source_id=item.source_id,
+                    content_hash=item.content_hash,
+                    source_url=source_urls.get(item.source_id),
+                ),
+            )
+            for item in evidence
+        ]
+        response = TranscriptBlockResponse(
+            schema_version=MCP_SCHEMA_VERSION,
+            status="retrieved" if items else "refused",
+            co_code=result["co_code"],
+            period=result["period"],
+            items=items,
+            verified=bool(items),
+            warnings=[] if items else ["No verified transcript blocks were found."],
+            latency_ms=(time.perf_counter() - started) * 1000,
         )
         return response.model_dump(mode="json")
 

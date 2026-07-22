@@ -89,8 +89,7 @@ def embed(texts: list[str], base_url: str, model: str) -> list[list[float]]:
 
 def create_indexes(driver, dimensions: int, database: str, vector_index: str, fulltext_index: str):
     driver.execute_query(
-        "CREATE CONSTRAINT company_code IF NOT EXISTS "
-        "FOR (n:Company) REQUIRE n.co_code IS UNIQUE",
+        "CREATE CONSTRAINT company_code IF NOT EXISTS FOR (n:Company) REQUIRE n.co_code IS UNIQUE",
         database_=database,
     )
     driver.execute_query(
@@ -99,13 +98,25 @@ def create_indexes(driver, dimensions: int, database: str, vector_index: str, fu
         database_=database,
     )
     driver.execute_query(
-        "CREATE CONSTRAINT chunk_id IF NOT EXISTS "
-        "FOR (n:Chunk) REQUIRE n.chunk_id IS UNIQUE",
+        "CREATE CONSTRAINT chunk_id IF NOT EXISTS FOR (n:Chunk) REQUIRE n.chunk_id IS UNIQUE",
         database_=database,
     )
     driver.execute_query(
-        "CREATE INDEX chunk_company_scope IF NOT EXISTS "
-        "FOR (n:Chunk) ON (n.co_code)",
+        "CREATE CONSTRAINT speaker_id IF NOT EXISTS FOR (n:Speaker) REQUIRE n.speaker_id IS UNIQUE",
+        database_=database,
+    )
+    driver.execute_query(
+        "CREATE CONSTRAINT speaker_turn_id IF NOT EXISTS "
+        "FOR (n:SpeakerTurn) REQUIRE n.turn_id IS UNIQUE",
+        database_=database,
+    )
+    driver.execute_query(
+        "CREATE INDEX earnings_call_scope IF NOT EXISTS "
+        "FOR (n:EarningsCall) ON (n.co_code, n.event_date)",
+        database_=database,
+    )
+    driver.execute_query(
+        "CREATE INDEX chunk_company_scope IF NOT EXISTS FOR (n:Chunk) ON (n.co_code)",
         database_=database,
     )
     create_vector_index(

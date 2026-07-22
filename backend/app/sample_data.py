@@ -99,7 +99,12 @@ EVIDENCE: list[Evidence] = [
         locator=SourceLocator(paragraph_id="p-18", timestamp="00:12:31"),
         captured_at="2026-07-10T10:00:00+08:00",
         content_hash="sha256:demo01-call-p18-v1",
-        metadata={"speaker": "財務長", "is_synthetic": True},
+        metadata={
+            "speaker": "財務長",
+            "fiscal_label": "2026Q2",
+            "event_date": "2026-07-10",
+            "is_synthetic": True,
+        },
     ),
     Evidence(
         evidence_id="ev-demo01-graph-product",

@@ -13,6 +13,7 @@ async def test_knowledge_mcp_contract_and_scope() -> None:
             "search_financial_documents",
             "search_graph_relationships",
             "get_source_preview",
+            "read_earnings_call_transcript",
         }.issubset({tool.name for tool in tools})
         result = await client.call_tool(
             "search_graph_relationships",

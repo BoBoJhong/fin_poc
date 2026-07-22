@@ -231,10 +231,16 @@ class CompanyLLMClient:
             else:
                 qualitative.append(f"{content}{citation}")
 
-        real_sources = any(item.data_version.startswith(("sec:", "ir:")) for item in evidence)
-        qualifier = (
-            "已匯入的 SEC 官方資料" if real_sources else "PoC 授權測試資料（內建資料為虛構）"
+        transcript_only = bool(evidence) and all(
+            item.source_type == "transcript" for item in evidence
         )
+        real_sources = any(item.data_version.startswith(("sec:", "ir:")) for item in evidence)
+        if transcript_only and real_sources:
+            qualifier = "已匯入的官方法說會逐字稿"
+        elif real_sources:
+            qualifier = "已匯入的 SEC 官方資料"
+        else:
+            qualifier = "PoC 授權測試資料（內建資料為虛構）"
         sections = [f"以下回答僅依據 {co_code} 的{qualifier}："]
         if metric_claims:
             sections.append("\n**財務數據**\n" + "\n".join(f"- {x}" for x in metric_claims))

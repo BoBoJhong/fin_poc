@@ -12,7 +12,20 @@ EXACT_PATTERNS = (
     re.compile(r"(20\d{2})\s*年\s*第?\s*([1-4一二三四])\s*季"),
 )
 CHINESE_QUARTERS = {"一": "1", "二": "2", "三": "3", "四": "4"}
-LATEST_TERMS = ("最近一季", "最新一季", "最近季度", "最新季度", "latest quarter")
+FISCAL_LABEL_PATTERN = re.compile(r"FY\s*(20\d{2})\s*[-_/ ]?Q([1-4])", re.IGNORECASE)
+LATEST_TERMS = (
+    "最近一季",
+    "最新一季",
+    "最近季度",
+    "最新季度",
+    "最近法說會",
+    "最近的法說會",
+    "最新法說會",
+    "最新的法說會",
+    "latest quarter",
+    "latest earnings call",
+    "most recent earnings call",
+)
 PREVIOUS_TERMS = ("上一季", "前一季", "previous quarter", "prior quarter")
 YEAR_AGO_TERMS = ("去年同期", "上年同期", "year ago quarter", "same quarter last year")
 
@@ -31,6 +44,11 @@ def canonical_period(value: str) -> str | None:
     return None
 
 
+def canonical_fiscal_label(value: str) -> str | None:
+    match = FISCAL_LABEL_PATTERN.search(value)
+    return f"FY{match.group(1)} Q{match.group(2)}" if match else None
+
+
 def sort_periods(periods: list[str]) -> list[str]:
     canonical = {period for value in periods if (period := canonical_period(value))}
     return sorted(canonical, key=lambda item: (int(item[:4]), int(item[-1])))
@@ -38,9 +56,7 @@ def sort_periods(periods: list[str]) -> list[str]:
 
 def has_relative_period(query: str) -> bool:
     lowered = query.casefold()
-    return any(
-        term in lowered for term in (*LATEST_TERMS, *PREVIOUS_TERMS, *YEAR_AGO_TERMS)
-    )
+    return any(term in lowered for term in (*LATEST_TERMS, *PREVIOUS_TERMS, *YEAR_AGO_TERMS))
 
 
 def resolve_period(
@@ -87,11 +103,7 @@ def resolve_period(
         )
     return PeriodResolution(
         input=next(
-            (
-                term
-                for term in (*LATEST_TERMS, *PREVIOUS_TERMS, *YEAR_AGO_TERMS)
-                if term in lowered
-            ),
+            (term for term in (*LATEST_TERMS, *PREVIOUS_TERMS, *YEAR_AGO_TERMS) if term in lowered),
             None,
         ),
         resolved_period=resolved,

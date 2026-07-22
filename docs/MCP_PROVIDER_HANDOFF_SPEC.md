@@ -109,9 +109,60 @@ Allowed evidence type:
 transcript
 ```
 
+#### `list_earnings_calls`
+
+Resolves one company and returns its available calls newest first. Agents must use this before
+interpreting requests such as “recent quarters”; they must not infer quarter availability from the
+current date.
+
+#### `retrieve_multi_period_earnings_call_evidence`
+
+Returns separately grouped transcript evidence for up to four requested or latest calls. `quarters`
+may contain the internal period or company fiscal label. Broad highlight requests run four retrieval
+facets per call and return `coverage_mode: broad_facet_retrieval`. This improves topic coverage but
+does not claim every transcript turn was summarized. Each evidence item retains its original period,
+locator and content hash.
+
+#### `get_earnings_call_transcript`
+
+Use this for “latest call”, “specific-quarter call” or “show the conversation” requests. It does
+not perform vector Top-K retrieval. It deterministically selects one official call and returns
+ordered, cursor-paginated speaker turns:
+
+```json
+{
+  "status": "retrieved",
+  "company_code": "MSFT",
+  "quarter": "FY2026 Q3",
+  "conversations": [
+    {
+      "speaker": {"name": "SATYA NADELLA", "title": "Chairman and CEO"},
+      "content": "Verbatim speaker-turn content"
+    }
+  ],
+  "next_cursor": 5
+}
+```
+
+`title` is an official job title. It is `null` when the source does not provide one. It never means
+`prepared_remarks`, `question_and_answer`, or document title.
+
+The public conversation response intentionally does not expose internal `section` metadata. The
+plain-text ingestion adapter accepts `姓名：內容`, `姓名: 內容`, `[姓名] 內容`,
+`姓名（職稱）：內容`, and `Speaker` / `Title` / `Content` field layouts; all normalize to the
+same `speaker.name`, optional `speaker.title`, and verbatim `content` contract shown above.
+
 #### `retrieve_earnings_call_evidence`
 
 Returns validated transcript evidence without answer generation.
+
+#### `retrieve_earnings_call_blocks`
+
+Returns validated transcript passages as nested JSON objects. Each item contains `period`,
+`fiscal_label`, matched `speaker`, all contributing `speakers`, `title`, `score`, and a `content`
+object with verbatim `text`, `section`, `paragraph_id`, `source_id`, `content_hash`, and
+`source_url`. Use this tool when the caller needs structured transcript blocks rather than the
+generic Evidence contract.
 
 ## 5. Tool selection
 
@@ -120,6 +171,9 @@ Returns validated transcript evidence without answer generation.
 | Revenue, EPS, profit, balance sheet, cash flow, financial ratios | `ask_financial_rag` |
 | SEC filing, financial-report risk or accounting disclosure | `ask_financial_rag` |
 | What management said, outlook, prepared remarks, earnings-call Q&A | `ask_earnings_call` |
+| Discover available or recent calls | `list_earnings_calls` |
+| Compare topics or highlights across several calls | `retrieve_multi_period_earnings_call_evidence`, then Agent synthesis |
+| Read the latest/specific call or obtain ordered dialogue | `get_earnings_call_transcript` |
 | External Agent performs generation | corresponding `retrieve_*_evidence` |
 | Actual number plus management explanation | call both public MCP services separately |
 
@@ -128,7 +182,7 @@ the two retrieval result sets before verification.
 
 ## 6. Input contract
 
-All four tools use:
+All public tools use the common fields:
 
 ```json
 {
@@ -141,6 +195,11 @@ All four tools use:
 |---|---|---:|---|
 | `query` | string | yes | Original natural-language user question containing company and intent |
 | `co_code` | string/null | no | Backward-compatible canonical company-code hint |
+
+`get_earnings_call_transcript` additionally accepts `cursor` (default `0`) and `limit` (default
+`20`, maximum `50`). `next_cursor` is passed back unchanged to read the following page.
+`list_earnings_calls` accepts `limit` (maximum `20`). The multi-period evidence tool accepts
+`quarters` and `limit`; it compares at most four calls and never merges their evidence arrays.
 
 Input rules:
 

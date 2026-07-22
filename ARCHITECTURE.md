@@ -67,10 +67,26 @@ SQLite, approved external SQL and approved external financial API records.
 Tools:
 
 - `ask_earnings_call`
+- `list_earnings_calls`
+- `retrieve_multi_period_earnings_call_evidence`
+- `get_earnings_call_transcript`
 - `retrieve_earnings_call_evidence`
+- `retrieve_earnings_call_blocks`
 
 Allowed source: `transcript` only. Speaker, section and source content come directly from citation
-metadata and quoted text.
+metadata and quoted text. When a natural-language query uniquely names a known speaker, retrieval
+hard-filters chunks by `speakers` before cosine ranking. The block tool returns nested attribution
+metadata without changing the existing string-based Evidence and citation contracts.
+
+`ask_earnings_call` answers a question through verified RAG.
+`list_earnings_calls` deterministically discovers available calls. The multi-period evidence tool
+selects up to four calls and retrieves each period independently, preventing cross-quarter evidence
+mixing. Broad highlight requests run four coverage facets (operations, strategy, outlook/risk and
+Q&A) per call; the result remains cited retrieval evidence, not a claim of exhaustive summarization.
+`get_earnings_call_transcript` handles “latest/specific call content” deterministically: it resolves
+one official call and returns cursor-paginated, ordered, single-speaker turns. It never uses vector
+Top-K for transcript browsing. `retrieve_earnings_call_evidence` remains the audit/external-RAG
+contract; the block tool is retained as the detailed compatibility contract.
 
 Mixed questions are two isolated tool calls combined by the calling Agent. Retrieval results are
 never mixed into a shared Top-K.
@@ -134,6 +150,28 @@ documents; it does not select financial values by vector similarity. Full rules 
 Qwen embedding produces query vectors. Vector candidates are server-side filtered by `co_code`,
 period and source type, then optionally reranked with scoped full-text signals. Graph expansion uses
 fixed relationship allowlists and a maximum hop count; unrestricted Text2Cypher is not used.
+Explicit multi-part English questions retain the full-query vector and add up to two facet vectors;
+their cosine scores are fused before the lexical rerank.
+
+Narrative ingestion uses bounded, structure-aware blocks. SEC blocks preserve every non-whitespace
+line in the selected sections, merge short content, hard-split long paragraphs and never silently
+stop at a document-level chunk count. Transcript blocks preserve speaker/section labels, hard-split
+long turns and merge short turns only within the same section while retaining all contributing
+speakers. Re-ingestion removes stale chunks for the same source before publishing the new set.
+
+Transcript ingestion has separate source adapters. `microsoft_ir_html` handles the verified
+Microsoft IR layout. `plain_text` accepts UTF-8 text using `姓名：內容`, `姓名: 內容`,
+`[姓名] 內容`, `姓名（職稱）：內容`, or the three-line `Speaker` / `Title` / `Content`
+layout. These layouts normalize to the same ordered speaker turns before chunking. Section is
+internal optional metadata: plain text defaults to `unknown` and changes only when an explicit
+prepared-remarks or Q&A heading is present.
+
+The implemented first-stage boundaries, remaining tokenizer limitation, relevant retrieval research
+and proposed parent-child evaluation path are documented in
+[docs/EMBEDDING_CHUNKING_RESEARCH.md](docs/EMBEDDING_CHUNKING_RESEARCH.md).
+
+The fixed earnings-call graph, identity keys, title semantics and relationship cardinalities are
+defined in [docs/NEO4J_EARNINGS_CALL_GRAPH.md](docs/NEO4J_EARNINGS_CALL_GRAPH.md).
 
 ## Company Entity Index
 

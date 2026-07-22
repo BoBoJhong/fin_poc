@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import Any, TypedDict
 from uuid import uuid4
@@ -10,7 +11,7 @@ from app.company_resolver import CompanyResolutionError, resolve_company_scope
 from app.llm import CompanyLLMClient
 from app.mcp_gateway import MCPGateway
 from app.models import ChatResponse, Citation, Evidence
-from app.period_resolver import has_relative_period, resolve_period
+from app.period_resolver import canonical_fiscal_label, has_relative_period, resolve_period
 from app.validation import EvidenceValidator
 
 
@@ -418,7 +419,7 @@ class FinancialAgentService:
                 period=item.period,
                 metadata={
                     key: item.metadata[key]
-                    for key in ("speaker", "section", "event_date")
+                    for key in ("speaker", "speakers", "section", "fiscal_label", "event_date")
                     if item.metadata.get(key) is not None
                 },
             )
@@ -436,9 +437,7 @@ class FinancialAgentService:
             period_resolution=final.get("period_resolution"),
         )
 
-    async def retrieve_evidence(
-        self, query: str, co_code: str | None = None
-    ) -> dict[str, Any]:
+    async def retrieve_evidence(self, query: str, co_code: str | None = None) -> dict[str, Any]:
         """Retrieve and validate evidence without answer generation or semantic LLM calls."""
         selected_code = self.validator.validate_scope(co_code) if co_code else None
         mentioned = await self.gateway.resolve_company(query)
@@ -483,3 +482,133 @@ class FinancialAgentService:
             "verification": state.get("verification", {}),
             "period_resolution": period_resolution.model_dump(mode="json"),
         }
+
+    async def retrieve_transcript_conversation(
+        self,
+        query: str,
+        co_code: str | None = None,
+        cursor: int = 0,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """Resolve one call, then read ordered speaker turns without semantic ranking."""
+        state = await self._scope_node({"query": query, "co_code": co_code})
+        scoped = str(state["co_code"])
+        resolution = dict(state["period_resolution"])
+        period = state.get("period")
+        if period is None and resolution.get("method") == "not_specified":
+            available = await self.gateway.list_available_periods(scoped, "transcript")
+            calendar = await self.gateway.get_fiscal_calendar(scoped)
+            latest = resolve_period("最近一季", available, fiscal_calendar=calendar)
+            period = latest.resolved_period
+            resolution = latest.model_dump(mode="json")
+        if resolution.get("input") and not period:
+            return {
+                "co_code": scoped,
+                "page": None,
+                "period_resolution": resolution,
+            }
+        period_or_fiscal_label = canonical_fiscal_label(query) or period
+        page = await self.gateway.get_transcript_conversation(
+            scoped,
+            period_or_fiscal_label,
+            max(cursor, 0),
+            min(max(limit, 1), 50),
+        )
+        return {"co_code": scoped, "page": page, "period_resolution": resolution}
+
+    async def list_earnings_calls(
+        self, query: str, co_code: str | None = None, limit: int = 10
+    ) -> dict[str, Any]:
+        """Resolve one company and list its available calls deterministically."""
+        state = await self._scope_node({"query": query, "co_code": co_code})
+        scoped = str(state["co_code"])
+        calls = await self.gateway.list_earnings_calls(scoped, min(max(limit, 1), 20))
+        return {"co_code": scoped, "calls": calls}
+
+    async def retrieve_multi_period_transcript_evidence(
+        self,
+        query: str,
+        co_code: str | None = None,
+        quarters: list[str] | None = None,
+        limit: int = 3,
+    ) -> dict[str, Any]:
+        """Retrieve separately scoped evidence for several calls without mixing periods."""
+        state = await self._scope_node({"query": query, "co_code": co_code})
+        scoped = str(state["co_code"])
+        calls = await self.gateway.list_earnings_calls(scoped, 20)
+        requested = [value.strip() for value in (quarters or []) if value.strip()]
+        if len(requested) > 4:
+            raise ValueError("At most four earnings-call quarters may be compared at once.")
+        if requested:
+            lookup = {
+                key.casefold(): call
+                for call in calls
+                for key in (call.period, call.quarter)
+            }
+            missing = [value for value in requested if value.casefold() not in lookup]
+            if missing:
+                available = ", ".join(call.quarter for call in calls) or "none"
+                raise ValueError(
+                    f"Unknown earnings-call quarter(s): {', '.join(missing)}. "
+                    f"Available: {available}."
+                )
+            selected_calls = []
+            selected_source_ids: set[str] = set()
+            for value in requested:
+                call = lookup[value.casefold()]
+                if call.source_id not in selected_source_ids:
+                    selected_calls.append(call)
+                    selected_source_ids.add(call.source_id)
+        else:
+            selected_calls = calls[: min(max(limit, 1), 4)]
+
+        broad_summary = bool(
+            re.search(r"重點|摘要|總結|幾(?:個)?季|幾個季度|分別|highlights?|summar", query, re.I)
+        )
+        coverage_queries = (
+            [
+                f"{query} 財務表現、營運與產品重點",
+                f"{query} 策略、需求與成長動能",
+                f"{query} 展望、指引、風險與資本支出",
+                f"{query} 分析師問答的重要問題與管理層回答",
+            ]
+            if broad_summary
+            else [query]
+        )
+
+        async def retrieve(call: Any) -> dict[str, Any]:
+            batches = await asyncio.gather(
+                *(
+                    self.gateway.search_documents(
+                        facet,
+                        scoped,
+                        top_k=3 if broad_summary else 5,
+                        period=call.period,
+                        source_types=("transcript",),
+                    )
+                    for facet in coverage_queries
+                )
+            )
+            unique: dict[str, Evidence] = {}
+            for item in self.validator.validate_evidence(
+                scoped,
+                (item for batch in batches for item in batch),
+                call.period,
+            ):
+                current = unique.get(item.evidence_id)
+                if current is None or item.score > current.score:
+                    unique[item.evidence_id] = item
+            evidence = sorted(unique.values(), key=lambda item: item.score, reverse=True)[
+                : self.max_evidence_items
+            ]
+            return {
+                "call": call,
+                "evidence": evidence,
+                "coverage_mode": (
+                    "broad_facet_retrieval" if broad_summary else "topic_retrieval"
+                ),
+                "coverage_queries": coverage_queries,
+            }
+
+        groups = await asyncio.gather(*(retrieve(call) for call in selected_calls))
+        return {"co_code": scoped, "groups": groups}

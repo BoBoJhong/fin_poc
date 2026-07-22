@@ -6,6 +6,7 @@ import json
 import logging
 import re
 import sqlite3
+import unicodedata
 from collections.abc import Iterable
 from typing import Any, Protocol
 
@@ -15,10 +16,14 @@ from app.external_api_connectors import build_external_api_repositories
 from app.models import (
     CompanySummary,
     Evidence,
+    EarningsCallRecord,
     FiscalCalendar,
     SourceLocator,
     SourcePreview,
     SourceType,
+    TranscriptConversationPage,
+    TranscriptConversationTurn,
+    TranscriptSpeaker,
 )
 from app.sample_data import COMPANIES, EVIDENCE, SOURCE_PREVIEWS, company_name
 
@@ -45,6 +50,18 @@ class KnowledgeRepository(Protocol):
     async def list_periods(
         self, co_code: str, source_types: tuple[str, ...] | None = None
     ) -> list[str]: ...
+
+    async def get_transcript_conversation(
+        self,
+        co_code: str,
+        period: str | None = None,
+        cursor: int = 0,
+        limit: int = 20,
+    ) -> TranscriptConversationPage | None: ...
+
+    async def list_earnings_calls(
+        self, co_code: str, limit: int = 20
+    ) -> list[EarningsCallRecord]: ...
 
 
 class FinanceRepository(Protocol):
@@ -112,6 +129,68 @@ class MockKnowledgeRepository:
                 and (allowed is None or str(item.source_type) in allowed)
             }
         )
+
+    async def get_transcript_conversation(
+        self,
+        co_code: str,
+        period: str | None = None,
+        cursor: int = 0,
+        limit: int = 20,
+    ) -> TranscriptConversationPage | None:
+        items = [
+            item
+            for item in EVIDENCE
+            if item.co_code == co_code
+            and item.source_type == SourceType.TRANSCRIPT
+            and (period is None or item.period == period)
+        ]
+        if not items:
+            return None
+        selected_period = period or max(item.period for item in items if item.period)
+        selected = [item for item in items if item.period == selected_period]
+        page_items = selected[cursor : cursor + limit]
+        next_cursor = cursor + limit if cursor + limit < len(selected) else None
+        first = selected[0]
+        preview = SOURCE_PREVIEWS.get(first.source_id)
+        return TranscriptConversationPage(
+            company_code=co_code,
+            period=selected_period,
+            quarter=str(first.metadata.get("fiscal_label") or selected_period),
+            conversations=[
+                TranscriptConversationTurn(
+                    speaker=TranscriptSpeaker(
+                        name=str(item.metadata.get("speaker") or "Unknown"),
+                        title=item.metadata.get("speaker_title"),
+                    ),
+                    content=item.content,
+                )
+                for item in page_items
+            ],
+            next_cursor=next_cursor,
+            source_id=first.source_id,
+            source_url=preview.live_url if preview else None,
+        )
+
+    async def list_earnings_calls(
+        self, co_code: str, limit: int = 20
+    ) -> list[EarningsCallRecord]:
+        calls: dict[tuple[str, str], EarningsCallRecord] = {}
+        for item in EVIDENCE:
+            if item.co_code != co_code or item.source_type != SourceType.TRANSCRIPT or not item.period:
+                continue
+            key = (item.period, item.source_id)
+            calls[key] = EarningsCallRecord(
+                company_code=co_code,
+                period=item.period,
+                quarter=str(item.metadata.get("fiscal_label") or item.period),
+                event_date=item.metadata.get("event_date"),
+                source_id=item.source_id,
+            )
+        return sorted(
+            calls.values(),
+            key=lambda call: (call.event_date or "", call.period, call.source_id),
+            reverse=True,
+        )[: min(max(limit, 1), 20)]
 
 
 class MockFinanceRepository:
@@ -478,7 +557,10 @@ class Neo4jKnowledgeRepository:
                 "period",
                 "paragraph_id",
                 "speaker",
+                "speakers",
                 "section",
+                "fiscal_label",
+                "sequence",
                 "event_date",
                 "captured_at",
                 "content_hash",
@@ -519,9 +601,142 @@ class Neo4jKnowledgeRepository:
             "營收": "revenue",
             "毛利率": "gross margin",
             "供應": "supply",
+            "可預測": "predictability predictable",
+            "消耗": "consumption usage",
+            "定價": "pricing seat-based pricing",
         }
         hints = [english for chinese, english in expansions.items() if chinese in query]
         return f"{query} {' '.join(hints)}".strip()
+
+    @staticmethod
+    def _embedding_query(query: str, source_types: tuple[str, ...]) -> str:
+        if source_types == ("transcript",):
+            task = (
+                "Retrieve verbatim earnings-call transcript passages that answer the query, "
+                "scoped to the specified company and reporting period"
+            )
+        else:
+            task = (
+                "Retrieve verbatim financial-report passages that answer the query, scoped to "
+                "the specified company and reporting period"
+            )
+        return f"Instruct: {task}\nQuery: {query}"
+
+    @staticmethod
+    def _query_facets(query: str) -> list[str]:
+        """Split explicit multi-part questions without using an LLM rewrite."""
+        english_parts = re.split(
+            r"\band\s+(?=(?:what|how|why|which|where|when|who|whether|did|does|"
+            r"were|was|is|are|will|can)\b)",
+            query,
+            flags=re.IGNORECASE,
+        )
+        parts = [
+            segment
+            for part in english_parts
+            for segment in re.split(
+                r"(?:，|,|；|;)?\s*(?:以及|並且|同時(?:也)?|另外|還有)\s*",
+                part,
+            )
+        ]
+        facets = [query]
+        if len(parts) > 1:
+            facets.extend(part.strip(" ,;?。？") for part in parts if part.strip(" ,;?。？"))
+        return list(dict.fromkeys(facets))[:3]
+
+    def _available_speakers(self, co_code: str, period: str | None) -> list[str]:
+        records, _, _ = self.driver.execute_query(
+            """
+            MATCH (chunk:Chunk {co_code: $co_code, source_type: 'transcript'})
+            WHERE $period IS NULL OR chunk.period = $period
+            UNWIND coalesce(chunk.speakers, [chunk.speaker]) AS speaker
+            WITH DISTINCT speaker WHERE speaker IS NOT NULL
+            RETURN speaker ORDER BY speaker
+            """,
+            co_code=co_code,
+            period=period,
+            database_=self.settings.neo4j_database,
+        )
+        return [str(record["speaker"]) for record in records if record.get("speaker")]
+
+    @staticmethod
+    def _mentioned_speakers(query: str, available_speakers: list[str]) -> list[str]:
+        normalized_query = unicodedata.normalize("NFKC", query).casefold()
+        query_tokens = set(re.findall(r"[0-9a-z\u3400-\u9fff]+", normalized_query))
+        token_owners: dict[str, set[str]] = {}
+        for speaker in available_speakers:
+            normalized = unicodedata.normalize("NFKC", speaker).casefold()
+            for token in re.findall(r"[0-9a-z\u3400-\u9fff]+", normalized):
+                if len(token) >= 3 and token not in {"mark", "operator"}:
+                    token_owners.setdefault(token, set()).add(speaker)
+
+        matches: list[str] = []
+        for speaker in available_speakers:
+            normalized = unicodedata.normalize("NFKC", speaker).casefold()
+            exact_name = normalized in normalized_query
+            unique_token = any(
+                token in query_tokens and token_owners.get(token) == {speaker}
+                for token in re.findall(r"[0-9a-z\u3400-\u9fff]+", normalized)
+            )
+            if exact_name or unique_token:
+                matches.append(speaker)
+        return matches
+
+    def _speaker_scoped_candidates(
+        self,
+        query_vectors: list[list[float]],
+        co_code: str,
+        period: str | None,
+        speakers: list[str],
+        limit: int,
+    ) -> list[Evidence]:
+        records, _, _ = self.driver.execute_query(
+            """
+            MATCH (chunk:Chunk {co_code: $co_code, source_type: 'transcript'})
+            WHERE ($period IS NULL OR chunk.period = $period)
+              AND any(
+                speaker IN coalesce(chunk.speakers, [chunk.speaker])
+                WHERE speaker IN $speakers
+              )
+            WITH chunk, [query_vector IN $query_vectors |
+                vector.similarity.cosine(chunk.embedding, query_vector)
+            ] AS facet_scores
+            WITH chunk, facet_scores,
+                 reduce(total = 0.0, score IN facet_scores | total + score)
+                 / size(facet_scores) AS score
+            WHERE score IS NOT NULL
+            RETURN chunk {
+                .chunk_id, .co_code, .source_id, .source_type, .title, .text, .period,
+                .paragraph_id, .speaker, .speakers, .section, .fiscal_label, .sequence,
+                .event_date,
+                .captured_at, .content_hash, .data_version
+            } AS data, score, facet_scores
+            ORDER BY score DESC
+            LIMIT $limit
+            """,
+            query_vectors=query_vectors,
+            co_code=co_code,
+            period=period,
+            speakers=speakers,
+            limit=limit,
+            database_=self.settings.neo4j_database,
+        )
+        candidates: list[Evidence] = []
+        for record in records:
+            data = dict(record["data"])
+            data["score"] = record["score"]
+            item = self._vector_item_to_evidence(data)
+            item.metadata["facet_scores"] = record.get("facet_scores", [])
+            primary_speaker = item.metadata.get("speaker")
+            matched_speakers = [
+                speaker for speaker in item.metadata.get("speakers", []) if speaker in speakers
+            ]
+            if matched_speakers:
+                item.metadata["primary_speaker"] = primary_speaker
+                item.metadata["speaker"] = matched_speakers[0]
+            item.metadata["speaker_filter"] = speakers
+            candidates.append(item)
+        return candidates
 
     async def search_documents(
         self,
@@ -531,35 +746,70 @@ class Neo4jKnowledgeRepository:
         period: str | None = None,
         source_types: tuple[str, ...] | None = None,
     ) -> list[Evidence]:
-        candidate_k = max(top_k * 4, 20)
+        candidate_k = max(top_k * 8, 40)
         filters: dict[str, dict[str, str]] = {"co_code": {"$eq": co_code}}
         if period:
             filters["period"] = {"$eq": period}
-        expanded_query = self._expand_financial_query(query)
-        async with self.embedding_semaphore:
-            query_vector = await asyncio.to_thread(self.embedder.embed_query, expanded_query)
         selected_source_types = source_types or ("financial_report", "transcript", "url")
-        results = await asyncio.gather(
-            *(
-                asyncio.to_thread(
-                    self.vector_retriever.search,
-                    query_vector=query_vector,
-                    top_k=candidate_k,
-                    filters={**filters, "source_type": {"$eq": source_type}},
-                )
-                for source_type in selected_source_types
+        query_facets = self._query_facets(query)
+        expanded_facets = [self._expand_financial_query(facet) for facet in query_facets]
+
+        async def embed(facet: str) -> list[float]:
+            embedding_query = self._embedding_query(facet, selected_source_types)
+            async with self.embedding_semaphore:
+                return await asyncio.to_thread(self.embedder.embed_query, embedding_query)
+
+        query_vectors = await asyncio.gather(*(embed(facet) for facet in expanded_facets))
+
+        mentioned_speakers: list[str] = []
+        if selected_source_types == ("transcript",):
+            available_speakers = await asyncio.to_thread(self._available_speakers, co_code, period)
+            mentioned_speakers = self._mentioned_speakers(query, available_speakers)
+
+        if mentioned_speakers:
+            candidates = await asyncio.to_thread(
+                self._speaker_scoped_candidates,
+                query_vectors,
+                co_code,
+                period,
+                mentioned_speakers,
+                candidate_k,
             )
-        )
-        unique: dict[str, Evidence] = {}
-        for result in results:
-            for raw_item in result.items:
-                item = self._vector_item_to_evidence(raw_item)
-                current = unique.get(item.evidence_id)
-                if current is None or item.score > current.score:
-                    unique[item.evidence_id] = item
-        candidates = list(unique.values())
+        else:
+            results = await asyncio.gather(
+                *(
+                    asyncio.to_thread(
+                        self.vector_retriever.search,
+                        query_vector=query_vector,
+                        top_k=candidate_k,
+                        filters={**filters, "source_type": {"$eq": source_type}},
+                    )
+                    for query_vector in query_vectors
+                    for source_type in selected_source_types
+                )
+            )
+            unique: dict[str, tuple[Evidence, list[float]]] = {}
+            for result in results:
+                for raw_item in result.items:
+                    item = self._vector_item_to_evidence(raw_item)
+                    current = unique.get(item.evidence_id)
+                    if current is None:
+                        unique[item.evidence_id] = (item, [item.score])
+                    else:
+                        current[1].append(item.score)
+            candidates = []
+            for item, facet_scores in unique.values():
+                item.score = sum(facet_scores) / len(facet_scores)
+                item.metadata["facet_scores"] = facet_scores
+                candidates.append(item)
         lexical_ranks = await asyncio.to_thread(
-            self._fulltext_ranks, expanded_query, co_code, candidate_k
+            self._fulltext_ranks,
+            self._expand_financial_query(query),
+            co_code,
+            candidate_k,
+            period,
+            selected_source_types,
+            mentioned_speakers,
         )
         vector_weight = min(max(self.settings.hybrid_vector_weight, 0.5), 1.0)
         for item in candidates:
@@ -576,6 +826,8 @@ class Neo4jKnowledgeRepository:
                     "vector_score": vector_score,
                     "fulltext_rank": lexical_rank,
                     "hybrid_score": item.score,
+                    "speaker_filter": mentioned_speakers,
+                    "query_facet_count": len(query_facets),
                 }
             )
         candidates.sort(key=lambda item: item.score, reverse=True)
@@ -592,17 +844,31 @@ class Neo4jKnowledgeRepository:
         selected.extend(item for item in candidates if item.evidence_id not in selected_ids)
         return selected[:top_k]
 
-    def _fulltext_ranks(self, query: str, co_code: str, limit: int) -> dict[str, int]:
+    def _fulltext_ranks(
+        self,
+        query: str,
+        co_code: str,
+        limit: int,
+        period: str | None = None,
+        source_types: tuple[str, ...] = (),
+        speakers: list[str] | None = None,
+    ) -> dict[str, int]:
         """Return lexical ranks only; vector retrieval remains the scoped candidate gate."""
         terms = re.findall(r"[0-9A-Za-z\u3400-\u9fff]+", query)
         if not terms:
             return {}
-        lucene_query = " ".join(terms)
+        lucene_query = " OR ".join(dict.fromkeys(terms))
         cypher = """
         CALL db.index.fulltext.queryNodes(
             $index_name, $query, {limit: $candidate_limit}
         ) YIELD node, score
         WHERE node.co_code = $co_code
+          AND ($period IS NULL OR node.period = $period)
+          AND (size($source_types) = 0 OR node.source_type IN $source_types)
+          AND (size($speakers) = 0 OR any(
+              speaker IN coalesce(node.speakers, [node.speaker])
+              WHERE speaker IN $speakers
+          ))
         RETURN node.chunk_id AS chunk_id, score
         ORDER BY score DESC
         LIMIT $limit
@@ -614,6 +880,9 @@ class Neo4jKnowledgeRepository:
                 query=lucene_query,
                 candidate_limit=max(limit * 20, 200),
                 co_code=co_code,
+                period=period,
+                source_types=list(source_types),
+                speakers=speakers or [],
                 limit=limit,
                 database_=self.settings.neo4j_database,
             )
@@ -663,7 +932,11 @@ class Neo4jKnowledgeRepository:
             metadata={
                 "retriever": "neo4j_vector",
                 "speaker": data.get("speaker"),
+                "speakers": data.get("speakers")
+                or ([data["speaker"]] if data.get("speaker") else []),
                 "section": data.get("section"),
+                "fiscal_label": data.get("fiscal_label"),
+                "sequence": data.get("sequence"),
                 "event_date": data.get("event_date"),
                 **metadata,
             },
@@ -840,6 +1113,112 @@ class Neo4jKnowledgeRepository:
             return [str(record["period"]) for record in records if record.get("period")]
 
         return await asyncio.to_thread(run)
+
+    async def get_transcript_conversation(
+        self,
+        co_code: str,
+        period: str | None = None,
+        cursor: int = 0,
+        limit: int = 20,
+    ) -> TranscriptConversationPage | None:
+        call_records, _, _ = await asyncio.to_thread(
+            self.driver.execute_query,
+            """
+            MATCH (call:EarningsCall {co_code: $co_code})
+            WHERE call.source_type = 'transcript'
+              AND call.official_source = true
+              AND ($period IS NULL OR call.period = $period OR call.fiscal_label = $period)
+            RETURN call.source_id AS source_id,
+                   call.period AS period,
+                   call.fiscal_label AS quarter,
+                   call.event_date AS event_date,
+                   call.live_url AS source_url
+            ORDER BY call.event_date DESC, call.source_id DESC
+            LIMIT 1
+            """,
+            co_code=co_code,
+            period=period,
+            database_=self.settings.neo4j_database,
+        )
+        if not call_records:
+            return None
+        call = call_records[0]
+        turn_records, _, _ = await asyncio.to_thread(
+            self.driver.execute_query,
+            """
+            MATCH (:EarningsCall {source_id: $source_id})-[:HAS_TURN]->(turn:SpeakerTurn)
+            WHERE turn.sequence > $cursor
+            RETURN turn.sequence AS sequence,
+                   turn.speaker AS speaker,
+                   turn.speaker_title AS speaker_title,
+                   turn.text AS content
+            ORDER BY turn.sequence
+            LIMIT $fetch_limit
+            """,
+            source_id=call["source_id"],
+            cursor=max(cursor, 0),
+            fetch_limit=min(max(limit, 1), 50) + 1,
+            database_=self.settings.neo4j_database,
+        )
+        bounded_limit = min(max(limit, 1), 50)
+        page_records = turn_records[:bounded_limit]
+        next_cursor = (
+            int(page_records[-1]["sequence"])
+            if len(turn_records) > bounded_limit and page_records
+            else None
+        )
+        return TranscriptConversationPage(
+            company_code=co_code,
+            period=str(call["period"]),
+            quarter=str(call.get("quarter") or call["period"]),
+            event_date=str(call.get("event_date") or "") or None,
+            conversations=[
+                TranscriptConversationTurn(
+                    speaker=TranscriptSpeaker(
+                        name=str(record["speaker"]),
+                        title=(
+                            str(record["speaker_title"]) if record.get("speaker_title") else None
+                        ),
+                    ),
+                    content=str(record["content"]),
+                )
+                for record in page_records
+            ],
+            next_cursor=next_cursor,
+            source_id=str(call["source_id"]),
+            source_url=str(call.get("source_url") or "") or None,
+        )
+
+    async def list_earnings_calls(
+        self, co_code: str, limit: int = 20
+    ) -> list[EarningsCallRecord]:
+        records, _, _ = await asyncio.to_thread(
+            self.driver.execute_query,
+            """
+            MATCH (call:EarningsCall {co_code: $co_code})
+            WHERE call.source_type = 'transcript'
+              AND call.official_source = true
+            RETURN call.source_id AS source_id,
+                   call.period AS period,
+                   call.fiscal_label AS quarter,
+                   call.event_date AS event_date
+            ORDER BY call.event_date DESC, call.source_id DESC
+            LIMIT $limit
+            """,
+            co_code=co_code,
+            limit=min(max(limit, 1), 20),
+            database_=self.settings.neo4j_database,
+        )
+        return [
+            EarningsCallRecord(
+                company_code=co_code,
+                period=str(record["period"]),
+                quarter=str(record.get("quarter") or record["period"]),
+                event_date=str(record.get("event_date") or "") or None,
+                source_id=str(record["source_id"]),
+            )
+            for record in records
+        ]
 
     async def close(self) -> None:
         await asyncio.to_thread(self.driver.close)

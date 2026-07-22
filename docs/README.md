@@ -46,6 +46,8 @@
 |---|---|
 | [Architecture](../ARCHITECTURE.md) | 元件、資料流與安全邊界的詳細設計 |
 | [HTTP API Reference](API_REFERENCE.md) | REST／SSE Route 細節 |
+| [Embedding and Chunking Research Notes](EMBEDDING_CHUNKING_RESEARCH.md) | 長文件切分、細粒度檢索論文與 parent-child 設計提案 |
+| [Neo4j Earnings-Call Graph](NEO4J_EARNINGS_CALL_GRAPH.md) | 法說會、講者、職稱、逐字 turn 與 embedding chunk 的固定圖譜契約 |
 | [Configuration](CONFIGURATION.md) | 環境變數完整清單 |
 | [Deployment](DEPLOYMENT.md) | systemd、Nginx、Firewall 與 Rollback 操作 |
 | [External Integration](EXTERNAL_INTEGRATION_GUIDE.md) | LLM、SQL DB、REST API Mapping 細節 |
